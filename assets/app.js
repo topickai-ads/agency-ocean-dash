@@ -1726,14 +1726,13 @@
       `花费 <b>${hms(M.spend_pulled_at || M.generated_at)}</b>` +
       ` · 回收实时 <b>${hms(M.live_revenue_at || M.generated_at)}</b>`);
 
-    const hrs = M.refresh_hours || 2;
-    let next = '';
-    if (ok) {
-      const nx = new Date(gen.getTime() + hrs * 3600e3);
-      const p2 = n => String(n).padStart(2, '0');
-      next = ` · 下次 <b>${p2(nx.getHours())}:${p2(nx.getMinutes())}</b>`;
-    }
-    put('nextRefresh', `每 ${hrs} 小时刷新${next}`);
+    const sched = (M.refresh_hours_bj && M.refresh_hours_bj.length ? M.refresh_hours_bj : [0, 6, 9, 11, 13, 15, 17, 19, 21]).slice().sort((a, b) => a - b);
+    const bjNow = new Date(Date.now() + 8 * 3600e3);
+    const curH = bjNow.getUTCHours() + bjNow.getUTCMinutes() / 60;
+    const nh = sched.find(h => h > curH);
+    const p2 = n => String(n).padStart(2, '0');
+    const nextTxt = nh === undefined ? `明天 ${p2(sched[0])}:00` : `${p2(nh)}:00`;
+    put('nextRefresh', `刷新 0/6/9 点起每2小时至21点 · 下次 <b>${nextTxt}</b>`);
 
     const fc = document.getElementById('footCount');
     if (fc) fc.textContent = `${DATES[0]} ~ ${TODAY} · ${ALL.length} 行 · 回收明细到 ${REV_UNTIL}`;
@@ -1776,6 +1775,13 @@
         <li>一切以「每天」为单位：曲线每个点就是那一天的实数，参考线只作参照，不做事先平均。</li>
         <li>今天盘中只记花费，不结算回收，所以回收曲线到昨天为止。</li>
         <li>回收只算 ${esc(AG)} 自己的量，不含自投。</li>
+      </ul>
+
+      <h3>数据更新</h3>
+      <ul>
+        <li>北京时间 0、6、9 点，之后每 2 小时至 21 点自动刷新（0/6/9/11/13/15/17/19/21）；夜里不加频。</li>
+        <li>0 点是日切后第一刷，此时更新「今天」。</li>
+        <li>数据非实时秒级，以顶栏「数据更新于」时间为准。</li>
       </ul>
 
       <h3>其它</h3>
