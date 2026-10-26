@@ -89,11 +89,16 @@
 <script>
 (function(){
 const b=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
-async function dec(pw){const E=window.DASHBOARD_ENC;
+async function tryOne(pw,entry){
  const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveKey"]);
- const k=await crypto.subtle.deriveKey({name:"PBKDF2",salt:b(E.salt),iterations:E.iter||200000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["decrypt"]);
- const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:b(E.iv)},k,b(E.ct));
+ const k=await crypto.subtle.deriveKey({name:"PBKDF2",salt:b(entry.salt),iterations:entry.iter||200000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["decrypt"]);
+ const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:b(entry.iv)},k,b(entry.ct));
  return JSON.parse(new TextDecoder().decode(pt));}
+async function dec(pw){const E=window.DASHBOARD_ENC;
+ if(E&&E.keys&&E.keys.length){
+  let last;for(const entry of E.keys){try{return await tryOne(pw,entry);}catch(e){last=e;}}
+  throw last||new Error("decrypt failed");}
+ return tryOne(pw,E);}
 async function go(pw){try{window.DASHBOARD_DATA=await dec(pw);}catch(e){sessionStorage.removeItem("ak");document.getElementById("gateErr").textContent=pw?"口令错误":"";return;}
  sessionStorage.setItem("ak",pw);document.getElementById("gate").remove();
  const sc=document.createElement("script");sc.src="assets/app.js?v="+Date.now();document.body.appendChild(sc);}
