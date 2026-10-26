@@ -56,6 +56,7 @@
   const fmt = {
     money(v, d = 0) {
       if (v == null || !isFinite(v)) return '—';
+      if (v !== 0 && Math.abs(v) < 1) d = Math.max(d, 2);   // 小额显示两位小数，别圆成 $0
       return '$' + v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
     },
     num(v, d = 0) {
@@ -78,11 +79,15 @@
       if (v == null || !isFinite(v)) return '—';
       if (Math.abs(v) >= 10000) return '$' + (v / 1000).toFixed(0) + 'k';
       if (Math.abs(v) >= 1000) return '$' + (v / 1000).toFixed(1) + 'k';
+      if (v !== 0 && Math.abs(v) < 1) return '$' + v.toFixed(2);
       return '$' + Math.round(v);
     },
     md(iso) { return iso.slice(5).replace('-', '/'); },
     wk(iso) { return '周' + '日一二三四五六'[new Date(iso + 'T00:00:00').getDay()]; }
   };
+
+  // 花费 < $1 的行比率无意义（几毛钱花费会算出鬼影比率），统一显示「—」
+  const okSp = v => v != null && v >= 1;
 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -186,9 +191,9 @@
       return {
         d, spendA, spendS: a.spendS,
         p0, net0, cum, obs, live,
-        rate: !spendA ? null : ((live && !net0) ? null : net0 / spendA),
+        rate: !okSp(spendA) ? null : ((live && !net0) ? null : net0 / spendA),
         cpa: p0 ? spendA / p0 : null,
-        cumRate: !spendA ? null : ((live && !net0) ? null : cum / spendA)
+        cumRate: !okSp(spendA) ? null : ((live && !net0) ? null : cum / spendA)
       };
     });
   }
@@ -278,9 +283,9 @@
     }
     return Array.from(m.values()).map(a => {
       a.cum = a.n.reduce((x, y) => x + y, 0);
-      a.d0 = a.spend ? a.n[0] / a.spend : null;
+      a.d0 = okSp(a.spend) ? a.n[0] / a.spend : null;
       a.cpa = a.p0 ? a.spend / a.p0 : null;
-      a.cumRate = a.spend ? a.cum / a.spend : null;
+      a.cumRate = okSp(a.spend) ? a.cum / a.spend : null;
       return a;
     }).sort((x, y) => y.spend - x.spend);
   }
@@ -293,7 +298,7 @@
       a.spend += r.spend; a.n0 += r.n[0] || 0; a.p0 += r.p0;
       m.set(r.ctry, a);
     }
-    return Array.from(m.values()).map(a => ({ ...a, rate: a.spend ? a.n0 / a.spend : null })).sort((x, y) => y.spend - x.spend);
+    return Array.from(m.values()).map(a => ({ ...a, rate: okSp(a.spend) ? a.n0 / a.spend : null })).sort((x, y) => y.spend - x.spend);
   }
 
   function median(arr) {
@@ -893,6 +898,7 @@
         const need = dayDiff(REV_UNTIL, addDays(d, k));
         return `<span class="dim" title="这批人还没到第 ${k} 天">还 ${need} 天</span>`;
       }
+      if (!okSp(a.spendA)) return '<span class="dim">—</span>';
       return `<span class="${cumTo(a, k) / a.spendA >= BENCH ? '' : 'tone-bad'}">${fmt.pct(cumTo(a, k) / a.spendA, 0)}</span>`;
     };
 
@@ -904,9 +910,9 @@
         <td>${fmt.money(a.spendA)}</td>
         <td class="dim">${fmt.num(a.p0)}</td>
         <td>${a.p0 ? fmt.money(a.spendA / a.p0) : '—'}</td>
-        <td>${ratePill(a.spendA ? a.n[0] / a.spendA : null)}</td>
+        <td>${ratePill(okSp(a.spendA) ? a.n[0] / a.spendA : null)}</td>
         ${OFFS_SHOW.slice(1).map(k => `<td>${rateAt(a, k, d)}</td>`).join('')}
-        <td><b>${a.spendA ? fmt.pct(cumAll / a.spendA, 0) : '—'}</b></td>
+        <td><b>${okSp(a.spendA) ? fmt.pct(cumAll / a.spendA, 0) : '—'}</b></td>
       </tr>`;
     }).join('');
 
@@ -924,7 +930,7 @@
         sp += a.spendA;
         nn += a.n.slice(0, k + 1).reduce((x, y) => x + y, 0);
       });
-      if (!sp) return '<span class="dim">—</span>';
+      if (!okSp(sp)) return '<span class="dim">—</span>';
       const partial = ds.length < list.length ? `<small class="dim"> ${ds.length}/${list.length} 天</small>` : '';
       return `${fmt.pct(nn / sp, 0)}${partial}`;
     };
@@ -971,11 +977,11 @@
           <td>${fmt.money(tot.spend)}</td>
           <td>${fmt.num(tot.p0)}</td>
           <td>${tot.p0 ? fmt.money(tot.spend / tot.p0) : '—'}</td>
-          <td>${ratePill(tot.spend ? tot.n[0] / tot.spend : null)}</td>
+          <td>${ratePill(okSp(tot.spend) ? tot.n[0] / tot.spend : null)}</td>
           <td>${footRate(1)}</td>
           <td>${footRate(3)}</td>
           <td>${footRate(7)}</td>
-          <td>${tot.spend ? fmt.pct(totCum / tot.spend, 0) : '—'}</td>
+          <td>${okSp(tot.spend) ? fmt.pct(totCum / tot.spend, 0) : '—'}</td>
         </tr></tfoot>
       </table></div>${gapNote}` : ''}
     </article>`;
@@ -1285,7 +1291,7 @@
       lv, top,
       body: renderRows(lv, top, 0),
       total,
-      rate: total.spend ? total.n0 / total.spend : null
+      rate: okSp(total.spend) ? total.n0 / total.spend : null
     };
   }
 
@@ -1333,7 +1339,7 @@
     if (!node) return '';
     const dates = fd;
     const sp = dates.map(d => (node.byDay.get(d) || {}).spend || 0);
-    const rt = dates.map(d => { const x = node.byDay.get(d); return x && x.spend ? x.n0 / x.spend : null; });
+    const rt = dates.map(d => { const x = node.byDay.get(d); return x && okSp(x.spend) ? x.n0 / x.spend : null; });
 
     const spendChart = chartHTML({
       H: 150, dates,
