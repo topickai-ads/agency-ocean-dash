@@ -1,7 +1,7 @@
 /* ============================================================
    投放效果看板 — 逐日优先 / 焦点日
    01 核心问题（当天/昨天）→ 02 预算·消耗·消耗比例（左表右图）→ 03 回收  → 下钻四层
-   代理 = Ocean。回收只算 Ocean 自己的量，自投不进回收。
+   代理视图 = Ocean only；内部全量（hebin）含自投 zt。
    ============================================================ */
 
 (function () {
@@ -150,9 +150,8 @@
   function match(r, opt) {
     opt = opt || {};
     const product = opt.product || state.product;
-    /* 整页只做 Ocean 的量：自投的花费/回收都不进任何一个口径，
-       否则「回收率」会拿 Ocean 的花费去除自投的回收，数字是错的。 */
-    if (r.src !== 'agency') return false;
+    /* 代理视图：只算 Ocean。内部全量视图（hebin）：含自投 zt，花费/回收同口径合计。 */
+    if (IS_AG && r.src !== 'agency') return false;
     if (product !== 'all' && r.p !== product) return false;
     if (opt.withQ && state.q) {
       const q = state.q.toLowerCase();
@@ -171,7 +170,13 @@
     for (const r of ALL) {
       if (r.lv !== lv || !dates.includes(r.d) || !match(r, opt)) continue;
       const a = m.get(r.d) || ZERO();
-      if (r.src === 'agency') a.spendA += r.spend; else a.spendS += r.spend;
+      if (IS_AG) {
+        if (r.src === 'agency') a.spendA += r.spend; else a.spendS += r.spend;
+      } else {
+        /* 全量：KPI 用合计花费，spendS 仍记自投份额便于展示 */
+        a.spendA += r.spend;
+        if (r.src !== 'agency') a.spendS += r.spend;
+      }
       a.p0 += r.p0;
       for (let i = 0; i < NOFF; i++) a.n[i] += r.n[i] || 0;
       m.set(r.d, a);
@@ -1435,7 +1440,7 @@
 
       <section class="sect">
         ${sec('02', '预算 · 消耗 · 消耗比例',
-          `左表：产品 → 账户 → campaign 逐层展开${IS_AG ? '' : ' · 自投不计入'} · 右图：每日花费走势`,
+          `左表：产品 → 账户 → campaign 逐层展开${IS_AG ? '' : ' · 含自投 zt'} · 右图：每日花费走势`,
           budFocus
             ? `<b>${fmt.money(cur.spendA)}</b> / ${fmt.money(budFocus)} · 消耗比例 ${fmt.pct(usedNow, 0)}`
             : `<b>${fmt.money(cur.spendA)}</b> 已花 · 当日预算未记账`)}
@@ -1623,13 +1628,19 @@
 
     if (IS_AG) document.querySelector('.brand h1').textContent = M.title || '投放效果看板';
 
-    /* 代理名 —— 页面上唯一的身份标识，不说「全部账户」 */
-    $('#who').innerHTML = `<span class="who-lb">代理</span><b>${esc(AG)}</b>${IS_AG ? '' : '<span class="who-tag">内部视图</span>'}`;
+    /* 顶栏身份：Ocean 密钥=代理·Ocean；hebin=内部·全部（含自投） */
+    if (IS_AG) {
+      $('#who').innerHTML = `<span class="who-lb">代理</span><b>${esc(AG)}</b>`;
+      document.title = (M.title || '投放效果看板') + ' · Ocean';
+    } else {
+      $('#who').innerHTML = `<span class="who-lb">内部</span><b>全部</b><span class="who-tag">含自投</span>`;
+      document.title = (M.title || '投放效果看板') + ' · 内部';
+    }
     $('#who').classList.toggle('is-ag', IS_AG);
 
     $('#brandSub').textContent = IS_AG
       ? `安装日口径 · 净回收 D0–D7 · 窗口固定 ${WINDOW_DAYS} 天`
-      : `${PRODUCTS.map(p => p.short).join(' + ')} · 安装日口径 · 净回收 D0–D7 · 窗口固定 ${WINDOW_DAYS} 天`;
+      : `${PRODUCTS.map(p => p.short).join(' + ')} · 含自投 zt · 安装日口径 · 净回收 D0–D7 · 窗口固定 ${WINDOW_DAYS} 天`;
     $('#benchHint').textContent = `D0 净回收率 ${fmt.pct(BENCH, 0)} = 基准`;
 
     let rz;
@@ -1767,14 +1778,14 @@
       <h3>预算台账</h3>
       <dl class="kv">${rows}</dl>
       <div class="note">${M.budget_note || ''}</div>
-      ${IS_AG ? '' : `<div class="note" style="background:#f2f4f8;border-color:var(--line);color:var(--ink-2)">预算只覆盖 ${AG} 账户；自投（campaign 名带 zt1 / zt2）没有日预算，只单独统计花费，不参与本页任何口径。</div>`}
+      ${IS_AG ? '' : `<div class="note" style="background:#f2f4f8;border-color:var(--line);color:var(--ink-2)">内部全量视图：含 Ocean 与自投（campaign 名带 zt1 / zt2，多在 DT06/DT07）。自投通常无单独日预算台账；花费与回收按合计口径。</div>`}
 
       <h3>页面口径</h3>
       <ul>
         <li>时间按「实时（今天）/ 昨天 / 前天」优先，长区间放后面 —— 微操看的是最近一两天。</li>
         <li>一切以「每天」为单位：曲线每个点就是那一天的实数，参考线只作参照，不做事先平均。</li>
         <li>今天盘中只记花费，不结算回收，所以回收曲线到昨天为止。</li>
-        <li>回收只算 ${esc(AG)} 自己的量，不含自投。</li>
+        ${IS_AG ? `<li>回收只算 ${esc(AG)} 自己的量，不含自投。</li>` : `<li>内部全量：花费与回收含 Ocean + 自投 zt。</li>`}
       </ul>
 
       <h3>数据更新</h3>
