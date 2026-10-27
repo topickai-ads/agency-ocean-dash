@@ -102,7 +102,13 @@ async function dec(pw){const E=window.DASHBOARD_ENC;
 const AK="agency_dash_ak",TTL=7*24*3600*1000,HOOK="agency_dash_hook";
 function saveAk(pw){localStorage.setItem(AK,JSON.stringify({v:pw,exp:Date.now()+TTL}));}
 function loadAk(){try{const raw=localStorage.getItem(AK);if(!raw)return null;const o=JSON.parse(raw);if(!o||!o.v||!o.exp||Date.now()>o.exp){localStorage.removeItem(AK);return null;}return o.v;}catch(e){localStorage.removeItem(AK);return null;}}
-function loadHook(){try{return (localStorage.getItem(HOOK)||"").trim();}catch(e){return "";}}
+function loadHook(){
+ try{
+  const fromMeta=(window.DASHBOARD_DATA&&window.DASHBOARD_DATA.meta&&window.DASHBOARD_DATA.meta.refresh_webhook)||"";
+  if(fromMeta) return String(fromMeta).trim();
+  return (localStorage.getItem(HOOK)||"").trim();
+ }catch(e){return "";}
+}
 async function loadEnc(){
  const bust=sessionStorage.getItem("agency_dash_bust")||String(Date.now());
  sessionStorage.removeItem("agency_dash_bust");
@@ -171,14 +177,8 @@ async function wirePull(){
    setTimeout(()=>setPullLabel("拉取最新",false),4000);
    return;
   }
-  try{
-   sessionStorage.setItem("agency_dash_bust",String(Date.now()));
-   location.reload();
-  }catch(e){
-   console.warn(e);
-   setPullLabel("失败，重试",false);
-   setTimeout(()=>setPullLabel("拉取最新",false),3000);
-  }
+  setPullLabel("未接通真拉",false);
+  setTimeout(()=>setPullLabel("拉取最新",false),3500);
  });
 }
 const u=new URL(location.href),q=u.searchParams.get("k");
