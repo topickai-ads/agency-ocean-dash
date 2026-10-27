@@ -125,6 +125,16 @@ svg { display: block; }
   text-decoration-thickness: 1px; text-decoration-color: #c7d9fe;
 }
 .meta-link:hover { text-decoration-color: var(--blue); }
+.meta-btn {
+  border: 1px solid #c7d9fe; background: #fff; cursor: pointer;
+  padding: 2px 10px; margin-left: 4px; border-radius: 6px;
+  font-size: 11px; font-weight: 600; color: var(--blue);
+  line-height: 1.4;
+}
+.meta-btn:hover { background: var(--blue-bg); border-color: var(--blue); }
+.meta-btn:disabled, .meta-btn.is-busy {
+  opacity: 0.65; cursor: wait;
+}
 .top-meta .dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--green); box-shadow: 0 0 0 3px var(--green-bg);

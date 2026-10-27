@@ -19,6 +19,7 @@
       <span id="nextRefresh">—</span>
       <span class="grow"></span>
       <span class="hint" id="benchHint">D0 净回收率 50% = 基准</span>
+      <button class="meta-btn" id="pullBtn" type="button" title="拉取并重载最新已发布数据">拉取最新</button>
       <button class="meta-link" id="notesBtn">口径说明</button>
     </div>
   </div>
@@ -85,7 +86,6 @@
 <input id="gateKey" type="password" autocomplete="current-password" style="width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:6px">
 <button style="margin-top:12px;width:100%;padding:8px;border:0;border-radius:6px;background:#2563eb;color:#fff">进入</button>
 <div id="gateErr" style="color:#c00;font-size:13px;margin-top:8px"></div></form></div>
-<script src="data/agency.enc.js"></script>
 <script>
 (function(){
 const b=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
@@ -99,17 +99,96 @@ async function dec(pw){const E=window.DASHBOARD_ENC;
   let last;for(const entry of E.keys){try{return await tryOne(pw,entry);}catch(e){last=e;}}
   throw last||new Error("decrypt failed");}
  return tryOne(pw,E);}
-const AK="agency_dash_ak",TTL=7*24*3600*1000;
+const AK="agency_dash_ak",TTL=7*24*3600*1000,HOOK="agency_dash_hook";
 function saveAk(pw){localStorage.setItem(AK,JSON.stringify({v:pw,exp:Date.now()+TTL}));}
 function loadAk(){try{const raw=localStorage.getItem(AK);if(!raw)return null;const o=JSON.parse(raw);if(!o||!o.v||!o.exp||Date.now()>o.exp){localStorage.removeItem(AK);return null;}return o.v;}catch(e){localStorage.removeItem(AK);return null;}}
-async function go(pw){try{window.DASHBOARD_DATA=await dec(pw);}catch(e){localStorage.removeItem(AK);document.getElementById("gateErr").textContent=pw?"口令错误":"";return;}
- saveAk(pw);document.getElementById("gate").remove();
- const sc=document.createElement("script");sc.src="assets/app.js?v="+Date.now();document.body.appendChild(sc);}
+function loadHook(){try{return (localStorage.getItem(HOOK)||"").trim();}catch(e){return "";}}
+async function loadEnc(){
+ const bust=sessionStorage.getItem("agency_dash_bust")||String(Date.now());
+ sessionStorage.removeItem("agency_dash_bust");
+ const r=await fetch("data/agency.enc.js?t="+encodeURIComponent(bust),{cache:"no-store"});
+ if(!r.ok) throw new Error("enc HTTP "+r.status);
+ const txt=await r.text();
+ const m=txt.match(/window\.DASHBOARD_ENC\s*=\s*(\{[\s\S]*?\})\s*;?\s*$/);
+ if(!m) throw new Error("enc parse");
+ window.DASHBOARD_ENC=JSON.parse(m[1]);
+}
+function bootApp(){
+ const old=document.getElementById("appBoot");
+ if(old) old.remove();
+ const sc=document.createElement("script");
+ sc.id="appBoot";
+ sc.src="assets/app.js?v="+Date.now();
+ document.body.appendChild(sc);
+}
+async function go(pw){try{await loadEnc();window.DASHBOARD_DATA=await dec(pw);}catch(e){localStorage.removeItem(AK);const err=document.getElementById("gateErr");if(err) err.textContent=pw?"口令错误或数据加载失败":"";console.warn(e);return;}
+ saveAk(pw);const g=document.getElementById("gate");if(g) g.remove();
+ bootApp();
+ wirePull();}
+function setPullLabel(t,busy){
+ const btn=document.getElementById("pullBtn");
+ if(!btn) return;
+ btn.textContent=t;
+ btn.disabled=!!busy;
+ btn.classList.toggle("is-busy",!!busy);
+}
+async function wirePull(){
+ const btn=document.getElementById("pullBtn");
+ if(!btn||btn.dataset.wired) return;
+ btn.dataset.wired="1";
+ btn.addEventListener("click",async()=>{
+  if(btn.disabled) return;
+  setPullLabel("拉取中…",true);
+  const hook=loadHook();
+  let hooked=false;
+  if(hook){
+   try{
+    await fetch(hook,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},body:"agency-dash-refresh "+new Date().toISOString()});
+    hooked=true;
+   }catch(e1){
+    try{await fetch(hook,{method:"POST",mode:"no-cors",body:"agency-dash-refresh"});hooked=true;}catch(e2){console.warn(e2);}
+   }
+  }
+  if(hooked){
+   setPullLabel("后台刷新中…",true);
+   const pw=loadAk();
+   const prevAt=(window.DASHBOARD_DATA&&window.DASHBOARD_DATA.meta&&window.DASHBOARD_DATA.meta.generated_at)||"";
+   for(let i=0;i<12;i++){
+    await new Promise(r=>setTimeout(r,20000));
+    try{
+     sessionStorage.setItem("agency_dash_bust",String(Date.now()));
+     await loadEnc();
+     const data=await dec(pw);
+     const at=data&&data.meta&&data.meta.generated_at;
+     if(at&&at!==prevAt){
+      sessionStorage.setItem("agency_dash_bust",String(Date.now()));
+      location.reload();
+      return;
+     }
+    }catch(e){console.warn(e);}
+   }
+   setPullLabel("仍在刷新，稍后再点",false);
+   setTimeout(()=>setPullLabel("拉取最新",false),4000);
+   return;
+  }
+  try{
+   sessionStorage.setItem("agency_dash_bust",String(Date.now()));
+   location.reload();
+  }catch(e){
+   console.warn(e);
+   setPullLabel("失败，重试",false);
+   setTimeout(()=>setPullLabel("拉取最新",false),3000);
+  }
+ });
+}
 const u=new URL(location.href),q=u.searchParams.get("k");
 if(q){saveAk(q);u.searchParams.delete("k");history.replaceState(null,"",u);}
+const hk=u.searchParams.get("hook");
+if(hk){localStorage.setItem(HOOK,hk);u.searchParams.delete("hook");history.replaceState(null,"",u);}
 const saved=loadAk();if(saved)go(saved);
 document.getElementById("gateForm").onsubmit=e=>{e.preventDefault();go(document.getElementById("gateKey").value);};
 })();
 </script>
+
 </body>
 </html>
