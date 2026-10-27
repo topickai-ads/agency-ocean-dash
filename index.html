@@ -104,10 +104,13 @@ function saveAk(pw){localStorage.setItem(AK,JSON.stringify({v:pw,exp:Date.now()+
 function loadAk(){try{const raw=localStorage.getItem(AK);if(!raw)return null;const o=JSON.parse(raw);if(!o||!o.v||!o.exp||Date.now()>o.exp){localStorage.removeItem(AK);return null;}return o.v;}catch(e){localStorage.removeItem(AK);return null;}}
 function loadHook(){
  try{
-  const fromMeta=(window.DASHBOARD_DATA&&window.DASHBOARD_DATA.meta&&window.DASHBOARD_DATA.meta.refresh_webhook)||"";
-  if(fromMeta) return String(fromMeta).trim();
-  return (localStorage.getItem(HOOK)||"").trim();
- }catch(e){return "";}
+  const m=window.DASHBOARD_DATA&&window.DASHBOARD_DATA.meta||{};
+  if(m.refresh_webhook) return {kind:"webhook",url:String(m.refresh_webhook).trim()};
+  if(m.refresh_ntfy) return {kind:"ntfy",topic:String(m.refresh_ntfy).trim()};
+  const ls=(localStorage.getItem(HOOK)||"").trim();
+  if(ls) return {kind:"webhook",url:ls};
+  return null;
+ }catch(e){return null;}
 }
 async function loadEnc(){
  const bust=sessionStorage.getItem("agency_dash_bust")||String(Date.now());
@@ -147,19 +150,28 @@ async function wirePull(){
   setPullLabel("拉取中…",true);
   const hook=loadHook();
   let hooked=false;
-  if(hook){
+  if(hook&&hook.kind==="ntfy"&&hook.topic){
    try{
-    await fetch(hook,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},body:"agency-dash-refresh "+new Date().toISOString()});
+    await fetch("https://ntfy.sh/"+encodeURIComponent(hook.topic),{method:"POST",headers:{"Content-Type":"text/plain"},body:"agency-dash-refresh "+new Date().toISOString()});
+    hooked=true;
+   }catch(e){console.warn(e);}
+   // 并行邮件触发（近实时例程）；失败不影响 ntfy
+   try{
+    fetch("https://formsubmit.co/ajax/billyhe+agency-dash@mail.grokbot.com",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({_subject:"agency-dash-refresh",message:"agency-dash-refresh",_captcha:"false",_template:"table",t:new Date().toISOString()})}).catch(()=>{});
+   }catch(e){}
+  } else if(hook&&hook.kind==="webhook"&&hook.url){
+   try{
+    await fetch(hook.url,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},body:"agency-dash-refresh "+new Date().toISOString()});
     hooked=true;
    }catch(e1){
-    try{await fetch(hook,{method:"POST",mode:"no-cors",body:"agency-dash-refresh"});hooked=true;}catch(e2){console.warn(e2);}
+    try{await fetch(hook.url,{method:"POST",mode:"no-cors",body:"agency-dash-refresh"});hooked=true;}catch(e2){console.warn(e2);}
    }
   }
   if(hooked){
    setPullLabel("后台刷新中…",true);
    const pw=loadAk();
    const prevAt=(window.DASHBOARD_DATA&&window.DASHBOARD_DATA.meta&&window.DASHBOARD_DATA.meta.generated_at)||"";
-   for(let i=0;i<12;i++){
+   for(let i=0;i<18;i++){
     await new Promise(r=>setTimeout(r,20000));
     try{
      sessionStorage.setItem("agency_dash_bust",String(Date.now()));
