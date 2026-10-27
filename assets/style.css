@@ -40,6 +40,8 @@ html, body {
   font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  max-width: 100%;
+  overflow-x: hidden; /* 防下钻表等宽内容把整页撑出视口 */
 }
 
 h1, h2, h3, p { margin: 0; }
@@ -145,6 +147,9 @@ main {
   max-width: 1560px; margin: 0 auto;
   padding: 18px 24px 32px;
   display: flex; flex-direction: column; gap: 20px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .sect { display: flex; flex-direction: column; gap: 10px; }
@@ -163,6 +168,10 @@ main {
   font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 8px;
 }
 
+.sect, .card, #drillBody {
+  max-width: 100%;
+  min-width: 0;
+}
 .card {
   background: var(--card);
   border: 1px solid var(--line);
@@ -359,7 +368,15 @@ main {
 .detail-head .toggle svg { width: 13px; height: 13px; transition: transform .18s; }
 .detail-head .toggle.open svg { transform: rotate(180deg); }
 
-.queue-wrap { overflow-x: auto; }
+.queue-wrap {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  max-width: 100%;
+  min-width: 0;
+}
 table.q { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 table.q th, table.q td { padding: 8px 12px; text-align: right; white-space: nowrap; }
 table.q th:first-child, table.q td:first-child { text-align: left; padding-left: 16px; }
@@ -436,7 +453,15 @@ table.q tfoot td {
 }
 .search input::placeholder { color: var(--ink-4); }
 
-.table-wrap { overflow-x: auto; }
+.table-wrap {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  max-width: 100%;
+  min-width: 0;
+}
 table.d { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 table.d th, table.d td { padding: 8px 12px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 table.d th:first-child, table.d td:first-child { text-align: left; padding-left: 16px; }
@@ -797,14 +822,37 @@ tr.lv-adset .txt b, tr.lv-ad .txt b { color: var(--ink-2); font-weight: 600; }
   .tabs { padding: 0 14px; }
 }
 
-/* 下钻头部在窄屏换行，别把层级按钮挤出去 */
+/* 下钻头部在窄屏换行，别把层级按钮挤出去；并限宽，避免 daySeg/搜索把整卡撑出视口 */
 .sec h2 { white-space: nowrap; }
-.drill-head { flex-wrap: wrap; }
-#daySeg { overflow-x: auto; max-width: 100%; flex: 0 1 auto; }
-.drill-head .head-right { margin-left: auto; }
+.drill-head {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+#daySeg {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  max-width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.drill-head .head-right {
+  margin-left: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.drill-head .search { min-width: 0; flex: 1 1 160px; }
+.drill-head .search input { width: 100%; min-width: 0; }
+.seg.lamps { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 @media (max-width: 1100px) {
-  .drill-head .head-right { margin-left: 0; width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .drill-head .head-right {
+    margin-left: 0; width: 100%; max-width: 100%;
+    justify-content: flex-start; flex-wrap: wrap;
+  }
 }
 
 
@@ -941,6 +989,8 @@ tr.lv-adset .txt b, tr.lv-ad .txt b { color: var(--ink-2); font-weight: 600; }
   background: #f7fcf8;
   border-radius: 10px;
   overflow: hidden;
+  max-width: calc(100% - 28px);
+  min-width: 0;
 }
 .okads.empty-ok {
   border-color: var(--line); background: #fafbfd;
@@ -985,8 +1035,60 @@ i.est {
 }
 
 /* 下钻表：列宽固定，展开更深一层时右侧数字列不会重排 */
-table.d.drill-t { table-layout: fixed; }
+table.d.drill-t { table-layout: fixed; width: 100%; min-width: 720px; }
+table.d.drill-t col.c-name { width: auto; }
+table.d.drill-t col.c-spend { width: 96px; }
+table.d.drill-t col.c-d0 { width: 96px; }
+table.d.drill-t col.c-rate { width: 118px; }
+table.d.drill-t col.c-payers { width: 76px; }
+table.d.drill-t col.c-cpa { width: 88px; }
+table.d.drill-t col.c-spark { width: 86px; }
 table.d.drill-t td.tree-cell {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 0; /* 配合 table-layout:fixed，强制名称列吃剩余宽并可 ellipsis */
+}
+table.d.drill-t td.tree-cell > .txt {
+  display: inline; /* 保留灯+箭头同行；截断靠 td overflow */
 }
 table.d.drill-t .spark-cell { padding-left: 8px; padding-right: 10px; }
+
+table.d.okads-t { table-layout: fixed; width: 100%; min-width: 560px; }
+table.d.okads-t td:first-child {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 0;
+}
+.okads-head {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.ok-sub { max-width: 100%; }
+
+/* 窄屏：缩小数字列/内边距，封顶树缩进观感；表在 .table-wrap 内横滑，外层不撑页 */
+@media (max-width: 860px) {
+  .top, .meta-bar, .tabs, .foot { max-width: 100%; min-width: 0; }
+  .top-inner, .top-meta { max-width: 100%; min-width: 0; }
+
+  table.d th, table.d td { padding: 7px 8px; font-size: 12px; }
+  table.d th:first-child, table.d td:first-child { padding-left: 10px; }
+  table.d th:last-child, table.d td:last-child { padding-right: 10px; }
+
+  table.d.drill-t { min-width: 640px; }
+  table.d.drill-t col.c-spend { width: 78px; }
+  table.d.drill-t col.c-d0 { width: 78px; }
+  table.d.drill-t col.c-rate { width: 96px; }
+  table.d.drill-t col.c-payers { width: 64px; }
+  table.d.drill-t col.c-cpa { width: 72px; }
+  table.d.drill-t col.c-spark { width: 70px; }
+  table.d.drill-t .spark-cell { padding-left: 4px; padding-right: 6px; }
+
+  table.d.okads-t { min-width: 520px; }
+  table.q th, table.q td { padding: 7px 8px; }
+
+  .okads { margin: 0 10px 10px; max-width: calc(100% - 20px); }
+  .ok-sub { max-width: 220px; }
+
+  .sec h2 { white-space: normal; }
+  .drill-head { gap: 8px; }
+  #daySeg { width: 100%; }
+  .seg.lamps { width: 100%; }
+}

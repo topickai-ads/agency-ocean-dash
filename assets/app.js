@@ -1210,10 +1210,10 @@
         <span class="dim">花 ${fmt.money(okSpend)}，占当天 ${fmt.pct(totalSpend ? okSpend / totalSpend : 0, 0)}</span>
         <span class="dim" style="margin-left:auto">D0 ≥ ${fmt.pct(BENCH, 0)} · 付费 > ${OK_MIN_PAYERS} 人 · 花费 > ${fmt.money(OK_MIN_SPEND)}${ok.some(o => o.est) ? ' · 带「估」的按花费分摊' : ''}</span>
       </div>
-      <table class="d okads-t">
+      <div class="table-wrap"><table class="d okads-t">
         <thead><tr><th>广告</th><th>花费</th><th>D0 净</th><th>D0 率</th><th>付费人</th><th>成本/人</th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>
+      </table></div>
       ${ok.length > LIMIT ? `<button class="okmore" id="okMore">${state.okAll ? '收起' : `还有 ${ok.length - LIMIT} 条，展开`}</button>` : ''}
     </div>`;
   }
@@ -1258,7 +1258,7 @@
       const isFocus = state.focus && state.focus.lv === rowLv && state.focus.key === o.key;
       const strong = rowLv === 'account' || rowLv === 'campaign';
       return `<tr class="lv-${rowLv} d${depth} ${isFocus ? 'is-focus' : ''}" data-lv="${rowLv}" data-key="${encodeURIComponent(key)}" data-node="${encodeURIComponent(o.key)}" data-name="${esc(label)}" data-extra="${esc(extra || '')}">
-        <td class="tree-cell" style="padding-left:${16 + depth * 20}px">
+        <td class="tree-cell" style="padding-left:${10 + Math.min(depth, 3) * 12}px">
           ${lamp(o.d0)}${caret}
           <span class="txt" title="${esc(label)}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>
         </td>
@@ -1313,8 +1313,8 @@
 
     return `${okAdsPanel(day)}<div class="table-wrap"><table class="d drill-t">
       <colgroup>
-        <col><col style="width:96px"><col style="width:96px"><col style="width:118px">
-        <col style="width:76px"><col style="width:88px"><col style="width:86px">
+        <col class="c-name"><col class="c-spend"><col class="c-d0"><col class="c-rate">
+        <col class="c-payers"><col class="c-cpa"><col class="c-spark">
       </colgroup>
       <thead>
         <tr class="grp">
