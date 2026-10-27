@@ -81,21 +81,25 @@
 </aside>
 
 <div id="gate" class="gate" aria-live="polite">
-  <div class="gate-card">
+  <div id="gateLoad" class="gate-load">
+    <div class="gate-load-mark mark" aria-hidden="true">
+      <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="currentColor"/><path d="M9 22V11m4.7 11V7m4.6 15v-8m4.7 8V10" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>
+    </div>
+    <div class="gate-load-title">投放效果看板</div>
+    <div class="gate-spin" aria-hidden="true"></div>
+    <div class="gate-load-text">正在打开看板</div>
+  </div>
+  <div id="gateCard" class="gate-card" hidden>
     <div class="gate-brand">
       <div class="mark" aria-hidden="true">
         <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="currentColor"/><path d="M9 22V11m4.7 11V7m4.6 15v-8m4.7 8V10" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>
       </div>
       <div>
         <h1>投放效果看板</h1>
-        <p id="gateSub">正在加载…</p>
+        <p id="gateSub">请输入访问口令</p>
       </div>
     </div>
-    <div id="gateLoad" class="gate-load">
-      <div class="gate-spin" aria-hidden="true"></div>
-      <span>正在打开看板</span>
-    </div>
-    <form id="gateForm" class="gate-form" hidden>
+    <form id="gateForm" class="gate-form">
       <label for="gateKey">访问口令</label>
       <input id="gateKey" type="password" autocomplete="current-password" placeholder="输入后进入">
       <button class="btn" type="submit">进入</button>
@@ -150,19 +154,16 @@ function bootApp(){
 }
 function showGateMode(mode, msg){
  const load=document.getElementById("gateLoad");
- const form=document.getElementById("gateForm");
- const sub=document.getElementById("gateSub");
+ const card=document.getElementById("gateCard");
  const err=document.getElementById("gateErr");
  const key=document.getElementById("gateKey");
  if(mode==="load"){
   if(load) load.hidden=false;
-  if(form) form.hidden=true;
-  if(sub) sub.textContent="正在加载…";
+  if(card) card.hidden=true;
   if(err) err.textContent="";
  } else {
   if(load) load.hidden=true;
-  if(form) form.hidden=false;
-  if(sub) sub.textContent="请输入访问口令";
+  if(card) card.hidden=false;
   if(err) err.textContent=msg||"";
   if(key){ key.value=""; setTimeout(()=>key.focus(),0); }
  }
