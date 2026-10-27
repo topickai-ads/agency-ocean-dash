@@ -80,12 +80,30 @@
   <div class="drawer-body" id="drawerBody"></div>
 </aside>
 
-<div id="gate" style="position:fixed;inset:0;z-index:9999;background:#f5f7fb;display:flex;align-items:center;justify-content:center;font-family:system-ui">
-<form id="gateForm" style="background:#fff;padding:28px;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);min-width:280px">
-<div style="font-weight:600;margin-bottom:12px">投放效果看板 · 请输入访问口令</div>
-<input id="gateKey" type="password" autocomplete="current-password" style="width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:6px">
-<button style="margin-top:12px;width:100%;padding:8px;border:0;border-radius:6px;background:#2563eb;color:#fff">进入</button>
-<div id="gateErr" style="color:#c00;font-size:13px;margin-top:8px"></div></form></div>
+<div id="gate" class="gate" aria-live="polite">
+  <div class="gate-card">
+    <div class="gate-brand">
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="currentColor"/><path d="M9 22V11m4.7 11V7m4.6 15v-8m4.7 8V10" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>
+      </div>
+      <div>
+        <h1>投放效果看板</h1>
+        <p id="gateSub">正在加载…</p>
+      </div>
+    </div>
+    <div id="gateLoad" class="gate-load">
+      <div class="gate-spin" aria-hidden="true"></div>
+      <span>正在打开看板</span>
+    </div>
+    <form id="gateForm" class="gate-form" hidden>
+      <label for="gateKey">访问口令</label>
+      <input id="gateKey" type="password" autocomplete="current-password" placeholder="输入后进入">
+      <button class="btn" type="submit">进入</button>
+      <div id="gateErr" class="gate-err"></div>
+      <p class="gate-hint">口令有效约 7 天，到期后再输入一次即可。</p>
+    </form>
+  </div>
+</div>
 <script>
 (function(){
 const b=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
@@ -130,10 +148,42 @@ function bootApp(){
  sc.src="assets/app.js?v="+Date.now();
  document.body.appendChild(sc);
 }
-async function go(pw){try{await loadEnc();window.DASHBOARD_DATA=await dec(pw);}catch(e){localStorage.removeItem(AK);const err=document.getElementById("gateErr");if(err) err.textContent=pw?"口令错误或数据加载失败":"";console.warn(e);return;}
- saveAk(pw);const g=document.getElementById("gate");if(g) g.remove();
+function showGateMode(mode, msg){
+ const load=document.getElementById("gateLoad");
+ const form=document.getElementById("gateForm");
+ const sub=document.getElementById("gateSub");
+ const err=document.getElementById("gateErr");
+ const key=document.getElementById("gateKey");
+ if(mode==="load"){
+  if(load) load.hidden=false;
+  if(form) form.hidden=true;
+  if(sub) sub.textContent="正在加载…";
+  if(err) err.textContent="";
+ } else {
+  if(load) load.hidden=true;
+  if(form) form.hidden=false;
+  if(sub) sub.textContent="请输入访问口令";
+  if(err) err.textContent=msg||"";
+  if(key){ key.value=""; setTimeout(()=>key.focus(),0); }
+ }
+}
+async function go(pw, fromSaved){
+ showGateMode("load");
+ try{
+  await loadEnc();
+  window.DASHBOARD_DATA=await dec(pw);
+ }catch(e){
+  localStorage.removeItem(AK);
+  console.warn(e);
+  showGateMode("form", fromSaved ? "登录已过期，请重新输入口令" : (pw ? "口令错误或数据加载失败" : ""));
+  return;
+ }
+ saveAk(pw);
+ const g=document.getElementById("gate");
+ if(g) g.remove();
  bootApp();
- wirePull();}
+ wirePull();
+}
 function setPullLabel(t,busy){
  const btn=document.getElementById("pullBtn");
  if(!btn) return;
@@ -197,8 +247,17 @@ const u=new URL(location.href),q=u.searchParams.get("k");
 if(q){saveAk(q);u.searchParams.delete("k");history.replaceState(null,"",u);}
 const hk=u.searchParams.get("hook");
 if(hk){localStorage.setItem(HOOK,hk);u.searchParams.delete("hook");history.replaceState(null,"",u);}
-const saved=loadAk();if(saved)go(saved);
-document.getElementById("gateForm").onsubmit=e=>{e.preventDefault();go(document.getElementById("gateKey").value);};
+const saved=loadAk();
+if(saved){
+ showGateMode("load");
+ go(saved, true);
+} else {
+ showGateMode("form");
+}
+document.getElementById("gateForm").onsubmit=e=>{
+ e.preventDefault();
+ go(document.getElementById("gateKey").value, false);
+};
 })();
 </script>
 
