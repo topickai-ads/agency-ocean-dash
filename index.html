@@ -144,9 +144,14 @@ function loadHook(){
 async function loadEnc(){
  const bust=sessionStorage.getItem("agency_dash_bust")||String(Date.now());
  sessionStorage.removeItem("agency_dash_bust");
- const r=await fetch("data/agency.enc.js?t="+encodeURIComponent(bust),{cache:"no-store"});
- if(!r.ok) throw new Error("enc HTTP "+r.status);
- const txt=await r.text();
+ const ctl=new AbortController();
+ const timer=setTimeout(()=>ctl.abort(),12000);
+ let r,txt;
+ try{
+  r=await fetch("data/agency.enc.js?t="+encodeURIComponent(bust),{cache:"no-store",signal:ctl.signal});
+  if(!r.ok) throw new Error("enc HTTP "+r.status);
+  txt=await r.text();
+ } finally { clearTimeout(timer); }
  const m=txt.match(/window\.DASHBOARD_ENC\s*=\s*(\{[\s\S]*?\})\s*;?\s*$/);
  if(!m) throw new Error("enc parse");
  window.DASHBOARD_ENC=JSON.parse(m[1]);
@@ -242,13 +247,17 @@ async function wirePull(){
   showPullOverlay(true, "正在拉取最新数据", "后台刷新中，完成后会自动刷新页面");
   const pw=loadAk();
   const prevAt=(window.DASHBOARD_DATA&&window.DASHBOARD_DATA.meta&&window.DASHBOARD_DATA.meta.generated_at)||"";
-  // 先等几秒再查，之后每 4 秒轮询；最多约 3 分钟
-  await new Promise(r=>setTimeout(r,4000));
-  for(let i=0;i<45;i++){
+  const started=Date.now();
+  const maxMs=90*1000; // 最长等 90 秒，超时必关
+  await new Promise(r=>setTimeout(r,3000));
+  while(Date.now()-started<maxMs){
    try{
     sessionStorage.setItem("agency_dash_bust",String(Date.now()));
     await loadEnc();
-    const data=await dec(pw);
+    const data=await Promise.race([
+      dec(pw),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error("dec timeout")),15000))
+    ]);
     const at=data&&data.meta&&data.meta.generated_at;
     if(at&&at!==prevAt){
      showPullOverlay(true, "数据已更新", "正在刷新页面…");
@@ -257,13 +266,13 @@ async function wirePull(){
      return;
     }
    }catch(e){console.warn(e);}
-   const sec=4+i*4;
-   showPullOverlay(true, "正在拉取最新数据", "后台刷新中（已等待约 "+sec+" 秒）…");
-   await new Promise(r=>setTimeout(r,4000));
+   const sec=Math.round((Date.now()-started)/1000);
+   showPullOverlay(true, "正在拉取最新数据", "后台刷新中（已等待 "+sec+" 秒）…");
+   await new Promise(r=>setTimeout(r,3000));
   }
   showPullOverlay(false);
-  setPullLabel("仍在刷新，稍后再点",false);
-  setTimeout(()=>setPullLabel("拉取最新",false),4000);
+  setPullLabel("超时未更新，请稍后再点",false);
+  setTimeout(()=>setPullLabel("拉取最新",false),4500);
  });
 }
 const u=new URL(location.href),q=u.searchParams.get("k");
