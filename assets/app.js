@@ -1778,7 +1778,7 @@
       <h3>预算台账</h3>
       <dl class="kv">${rows}</dl>
       <div class="note">${M.budget_note || ''}</div>
-      ${IS_AG ? '' : `<div class="note" style="background:#f2f4f8;border-color:var(--line);color:var(--ink-2)">内部全量视图：含 Ocean 与自投（campaign 名带 zt1 / zt2，多在 DT06/DT07）。自投通常无单独日预算台账；花费与回收按合计口径。</div>`}
+      ${IS_AG ? '' : `<div class="note" style="background:#f2f4f8;border-color:var(--line);color:var(--ink-2)">内部全量视图：含 Ocean 与自投（campaign 名带 zt1 / zt2，页显 ZT1/ZT2）。自投通常无单独日预算台账；花费与回收按合计口径。</div>`}
 
       <h3>页面口径</h3>
       <ul>
