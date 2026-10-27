@@ -602,13 +602,18 @@
     const live = focus === TODAY;
     const B = budgetAt(focus);
 
-    /* 当日花费（只算 Ocean） */
+    /* 当日花费 + D0 净回收（只算当前视图匹配的量） */
     const spProd = {}, spAcc = {}, spCamp = {};
+    const n0Prod = {}, n0Acc = {}, n0Camp = {};
     for (const r of ALL) {
       if (r.lv !== 'campaign' || r.d !== focus || !match(r, {})) continue;
+      const n0 = r.n[0] || 0;
       spProd[r.p] = (spProd[r.p] || 0) + r.spend;
       spAcc[r.acc] = (spAcc[r.acc] || 0) + r.spend;
       spCamp[r.acc + '|' + r.camp] = (spCamp[r.acc + '|' + r.camp] || 0) + r.spend;
+      n0Prod[r.p] = (n0Prod[r.p] || 0) + n0;
+      n0Acc[r.acc] = (n0Acc[r.acc] || 0) + n0;
+      n0Camp[r.acc + '|' + r.camp] = (n0Camp[r.acc + '|' + r.camp] || 0) + n0;
     }
 
     const accProd = n => (acctMeta(n) || {}).product;
@@ -638,16 +643,17 @@
       ? `<button class="caret ${state.open.has(k) ? 'open' : ''}" data-bk="${k}" aria-label="展开"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
       : '<button class="caret blank" tabindex="-1"></button>';
 
-    const row = (cls, k, has, nameHTML, sp, b) => `
+    const row = (cls, k, has, nameHTML, sp, b, n0) => `
       <div class="bs-row ${cls}${has ? ' can-open' : ''}"${has ? ` data-bk="${k}"` : ''}>
         <div class="nm">${caret(k, has)}${nameHTML}</div>
         <div class="num">${b ? fmt.money(b) : '<span class="dim">—</span>'}</div>
         <div class="num"><b>${fmt.money(sp)}</b></div>
         <div class="num">${paceCell(sp, b)}</div>
+        <div class="num">${n0 ? fmt.money(n0) : '<span class="dim">—</span>'}</div>
       </div>`;
 
     let body = '';
-    let tSp = 0, tB = 0, anyB = false;
+    let tSp = 0, tB = 0, tN0 = 0, anyB = false;
 
     for (const pid of pids) {
       const pk = 'b|p:' + pid;
@@ -657,8 +663,10 @@
       if (b) { tB += b; anyB = true; }
       tSp += sp;
 
+      const pn0 = n0Prod[pid] || 0;
+      tN0 += pn0;
       body += row('lv-prod', pk, true,
-        `<b>${esc(prod.short)}</b><em>${prodAccN[pid] || 0} 个账户</em>`, sp, b);
+        `<b>${esc(prod.short)}</b><em>${prodAccN[pid] || 0} 个账户</em>`, sp, b, pn0);
 
       if (!state.open.has(pk)) continue;
 
@@ -670,7 +678,7 @@
         const ak = 'b|a:' + acc;
         const asp = spAcc[acc] || 0;
         const ab = B.known ? (B.acc[acc] || 0) : null;
-        body += row('lv-acc', ak, true, `${esc(acc)}<em>${esc((acctMeta(acc) || {}).country || '')}</em>`, asp, ab);
+        body += row('lv-acc', ak, true, `${esc(acc)}<em>${esc((acctMeta(acc) || {}).country || '')}</em>`, asp, ab, n0Acc[acc] || 0);
 
         if (!state.open.has(ak)) continue;
 
@@ -682,7 +690,7 @@
           const name = k.slice(acc.length + 1);
           const csp = spCamp[k];
           const cb = cm ? (cm[name] || 0) : null;
-          body += row('lv-camp', 'b|c:' + k, false, esc(name), csp, cb);
+          body += row('lv-camp', 'b|c:' + k, false, esc(name), csp, cb, n0Camp[k] || 0);
         }
         if (!camps.length) body += `<div class="bs-row lv-camp"><div class="nm dim">这一天没有花费</div></div>`;
       }
@@ -697,6 +705,7 @@
           <div class="num">预算</div>
           <div class="num">消耗</div>
           <div class="num">消耗比例</div>
+          <div class="num">D0 回收</div>
         </div>
         ${body || '<div class="bs-row"><div class="nm dim">这一天没有花费</div></div>'}
         <div class="bs-row bs-total">
@@ -704,6 +713,7 @@
           <div class="num">${anyB ? fmt.money(tB) : '<span class="dim">—</span>'}</div>
           <div class="num"><b>${fmt.money(tSp)}</b></div>
           <div class="num">${paceCell(tSp, anyB ? tB : null)}</div>
+          <div class="num">${tN0 ? fmt.money(tN0) : '<span class="dim">—</span>'}</div>
         </div>`;
 
     return { html, anyB, tB, tSp, ledgerFrom };
@@ -724,8 +734,8 @@
     return T.anyB
       ? `预算 = 当天真在跑的 campaign 预算之和${live
           ? '；今天还没跑完，消耗比例收盘前会一直偏低'
-          : '（按变更日志回溯）；campaign 级预算 Meta 只给当前值，历史日留空'}。`
-      : `当日预算没记账${T.ledgerFrom ? `（台账从 ${fmt.md(T.ledgerFrom)} 起）` : ''}，只显示消耗。`;
+          : '（按变更日志回溯）；campaign 级预算 Meta 只给当前值，历史日留空'}。D0 回收 = 当天安装用户的净回收。`
+      : `当日预算没记账${T.ledgerFrom ? `（台账从 ${fmt.md(T.ledgerFrom)} 起）` : ''}，只显示消耗与 D0 回收。`;
   }
 
   function budgetSpendCard(dates, focus, cur, focusIdx) {
@@ -1439,7 +1449,7 @@
       </section>
 
       <section class="sect">
-        ${sec('02', '预算 · 消耗 · 消耗比例',
+        ${sec('02', '预算 · 消耗 · D0 回收',
           `左表：产品 → 账户 → campaign 逐层展开${IS_AG ? '' : ' · 含自投 zt'} · 右图：每日花费走势`,
           budFocus
             ? `<b>${fmt.money(cur.spendA)}</b> / ${fmt.money(budFocus)} · 消耗比例 ${fmt.pct(usedNow, 0)}`
