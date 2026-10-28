@@ -1758,6 +1758,42 @@
     const nh = sched.find(h => h > curH);
     const p2 = n => String(n).padStart(2, '0');
     const nextTxt = nh === undefined ? `明天 ${p2(sched[0])}:00` : `${p2(nh)}:00`;
+    /* 某刷新档已过 45 分钟而线上数据仍停在该档之前：顶栏标红，避免静默停在旧时间戳 */
+    if (ok) {
+      const slots = sched.length ? sched : [0, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+      const bjMs = Date.now() + 8 * 3600e3;
+      const bj = new Date(bjMs);
+      const y = bj.getUTCFullYear(), mo = bj.getUTCMonth(), da = bj.getUTCDate();
+      const minsNow = bj.getUTCHours() * 60 + bj.getUTCMinutes();
+      let missed = null; // {label, slotMs}
+      for (let dayOffset = 0; dayOffset <= 1 && !missed; dayOffset++) {
+        const day = new Date(Date.UTC(y, mo, da - dayOffset));
+        const daySlots = dayOffset === 0 ? slots.filter(h => h * 60 + 45 <= minsNow) : slots.slice();
+        for (let i = daySlots.length - 1; i >= 0; i--) {
+          const h = daySlots[i];
+          const slotUtc = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), h, 0, 0) - 8 * 3600e3;
+          const ageMin = (Date.now() - slotUtc) / 60000;
+          if (ageMin < 45) continue;
+          if (gen.getTime() < slotUtc - 10 * 60000) {
+            missed = { h, still: (M.generated_at || '').slice(11, 16) || '—' };
+            break;
+          }
+          break; // 最近一档已覆盖，不必再往前查
+        }
+      }
+      if (missed) {
+        const el = document.getElementById('asOf');
+        if (el) {
+          el.innerHTML = `⚠ ${p2(missed.h)}:00 档未上线（刷新或推送失败），仍停在 ${missed.still}`;
+          el.style.color = '#c62828';
+          el.style.fontWeight = '700';
+        }
+      } else {
+        const el = document.getElementById('asOf');
+        if (el) { el.style.color = ''; el.style.fontWeight = ''; }
+      }
+    }
+
     put('nextRefresh', `刷新 0/6 点 + 白天 8–22 每小时 · 下次 <b>${nextTxt}</b>`);
 
     const fc = document.getElementById('footCount');
