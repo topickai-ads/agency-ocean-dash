@@ -42,8 +42,8 @@
     level: 'account',
     open: new Set(),
     focus: null,
-    detail: false,
-    tab: 'overview',      // overview | drill
+    detail: true,
+    tab: 'overview',      // overview(预算及消耗下钻) | recovery(回收及明细)
     drillDay: null,
     okAll: false
   };
@@ -1428,7 +1428,6 @@
 
   function render() {
     syncTabs();
-    if (state.tab === 'drill') { renderDrill(); return; }
     const wd = windowDates();
     const FD = wd.filter(d => d !== TODAY);
     CUR_FD = FD;
@@ -1449,7 +1448,16 @@
     const budFocus = budgetAt(focus).total;
     const usedNow = budFocus ? cur.spendA / budFocus : null;
 
-    main.innerHTML = `
+    const recHTML = `
+      <section class="sect">
+        ${sec('01', '回收情况', `当日快照 + 逐日走势 · 只算 ${AG} 自己的量 · D0 基准 ${fmt.pct(BENCH, 0)}`, '')}
+        ${snapStrip(daily, focusIdx)}
+        <div class="row-mini">${recoveryCards(wd, focusIdx)}</div>
+        ${detailCard(wd)}
+      </section>
+
+`;
+    main.innerHTML = state.tab === 'recovery' ? recHTML : `
       <section class="sect">
         ${sec('01', '预算 · 消耗 · D0 回收率',
           `左表：产品 → 账户 → campaign 逐层展开${IS_AG ? '' : ' · 含自投 zt'} · 右图：每日花费走势`,
@@ -1461,17 +1469,12 @@
           ${spendTrendCard(wd, focusIdx, cur)}
         </div>
       </section>
-
-      <section class="sect">
-        ${sec('02', '回收情况', `当日快照 + 逐日走势 · 只算 ${AG} 自己的量 · D0 基准 ${fmt.pct(BENCH, 0)}`, '')}
-        ${snapStrip(daily, focusIdx)}
-        <div class="row-mini">${recoveryCards(wd, focusIdx)}</div>
-        ${detailCard(wd)}
-      </section>
+      <div id="drillSlot"></div>
 
     `;
 
 
+    if (state.tab !== 'recovery') renderDrill(document.getElementById('drillSlot'));
     syncHash();
     requestAnimationFrame(() => {
       mountCharts();
@@ -1481,7 +1484,7 @@
 
   /* ---------------- 下钻 tab ---------------- */
 
-  function renderDrill() {
+  function renderDrill(slot) {
     /* 下钻按自然日，含今天（今天有实时 D0） */
     const days = DATES.slice(-Math.min(DATES.length, IS_AG ? 7 : 7));
     if (!state.drillDay || !days.includes(state.drillDay)) state.drillDay = days[days.length - 1];
@@ -1490,9 +1493,9 @@
     CUR_DAY = day;
     CUR_WIN = days;
 
-    main.innerHTML = `
+    (slot || main).innerHTML = `
       <section class="sect">
-        ${sec('03', '四层明细',
+        ${sec('02', '四层明细',
           `账号 → Campaign → Adset → Ad，只列当天在投的 · 行首灯 = 当天 D0（≥${fmt.pct(LIGHT.ok, 0)} 绿 · ${fmt.pct(LIGHT.warn, 0)}–${fmt.pct(LIGHT.ok, 0)} 黄 · &lt;${fmt.pct(LIGHT.warn, 0)} 红）· 层级按钮上的数字 = 红灯行占该层花费`,
           `${fmt.md(day)}${day === TODAY ? ' 盘中' : ''} · 花费 ${fmt.money((() => { let v = 0; for (const r of ALL) if (r.lv === 'campaign' && r.d === day && match(r, {})) v += r.spend; return v; })())}`)}
         <article class="card">
@@ -1527,7 +1530,7 @@
     $$('#tabs button').forEach(b => b.classList.toggle('is-active', b.dataset.tab === state.tab));
     /* 下钻页固定 7 天，概览页跟时间口径走 */
     const seg = document.getElementById('rangeSeg');
-    if (seg) seg.style.display = state.tab === 'drill' ? 'none' : '';
+    if (seg) seg.style.display = '';
   }
 
   function syncHash() {
@@ -1536,7 +1539,7 @@
     if (state.product !== 'all') q.set('product', state.product);
     q.set('v', state.view);
     if (state.level !== 'account') q.set('level', state.level);
-    if (state.tab === 'drill' && state.drillDay) q.set('day', state.drillDay);
+    if (state.tab === 'overview' && state.drillDay) q.set('day', state.drillDay);
     const h = q.toString();
     history.replaceState(null, '', h ? '#' + h : location.pathname + location.search);
   }
@@ -1551,7 +1554,7 @@
     else if (/^\d+$/.test(v)) state.view = 'today';   // 旧链接里的 7 / 14 / 30
     const l = q.get('level');
     if (LEVELS.includes(l)) state.level = l;
-    if (q.get('tab') === 'drill') state.tab = 'drill';
+    if (q.get('tab') === 'recovery') state.tab = 'recovery';
     const dd = q.get('day');
     if (dd && /^\d{4}-\d{2}-\d{2}$/.test(dd)) state.drillDay = dd;
   }
