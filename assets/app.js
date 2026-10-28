@@ -87,6 +87,7 @@
   };
 
   // 花费 < $1 的行比率无意义（几毛钱花费会算出鬼影比率），统一显示「—」
+  const FEE = 1.05; /* 投放成本 = Meta spend ×1.05（代理服务费 5%），回收率分母 */
   const okSp = v => v != null && v >= 1;
 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -196,9 +197,9 @@
       return {
         d, spendA, spendS: a.spendS,
         p0, net0, cum, obs, live,
-        rate: !okSp(spendA) ? null : ((live && !net0) ? null : net0 / spendA),
+        rate: !okSp(spendA) ? null : ((live && !net0) ? null : (net0 / (spendA * FEE))),
         cpa: p0 ? spendA / p0 : null,
-        cumRate: !okSp(spendA) ? null : ((live && !net0) ? null : cum / spendA)
+        cumRate: !okSp(spendA) ? null : ((live && !net0) ? null : (cum / (spendA * FEE)))
       };
     });
   }
@@ -288,9 +289,9 @@
     }
     return Array.from(m.values()).map(a => {
       a.cum = a.n.reduce((x, y) => x + y, 0);
-      a.d0 = okSp(a.spend) ? a.n[0] / a.spend : null;
+      a.d0 = okSp(a.spend) ? (a.n[0] / (a.spend * FEE)) : null;
       a.cpa = a.p0 ? a.spend / a.p0 : null;
-      a.cumRate = okSp(a.spend) ? a.cum / a.spend : null;
+      a.cumRate = okSp(a.spend) ? (a.cum / (a.spend * FEE)) : null;
       return a;
     }).sort((x, y) => y.spend - x.spend);
   }
@@ -303,7 +304,7 @@
       a.spend += r.spend; a.n0 += r.n[0] || 0; a.p0 += r.p0;
       m.set(r.ctry, a);
     }
-    return Array.from(m.values()).map(a => ({ ...a, rate: okSp(a.spend) ? a.n0 / a.spend : null })).sort((x, y) => y.spend - x.spend);
+    return Array.from(m.values()).map(a => ({ ...a, rate: okSp(a.spend) ? (a.n0 / (a.spend * FEE)) : null })).sort((x, y) => y.spend - x.spend);
   }
 
   function median(arr) {
@@ -646,7 +647,7 @@
     const d0RateCell = (sp, n0) => {
       if (!okSp(sp)) return '<span class="dim">—</span>';
       if (!n0) return '<span class="dim">—</span>';
-      return ratePill(n0 / sp, 0);
+      return ratePill((n0 / (sp * FEE)), 0);
     };
 
     const row = (cls, k, has, nameHTML, sp, b, n0) => `
@@ -920,7 +921,7 @@
         return `<span class="dim" title="这批人还没到第 ${k} 天">还 ${need} 天</span>`;
       }
       if (!okSp(a.spendA)) return '<span class="dim">—</span>';
-      return `<span class="${cumTo(a, k) / a.spendA >= BENCH ? '' : 'tone-bad'}">${fmt.pct(cumTo(a, k) / a.spendA, 0)}</span>`;
+      return `<span class="${(cumTo(a, k) / (a.spendA * FEE)) >= BENCH ? '' : 'tone-bad'}">${fmt.pct((cumTo(a, k) / (a.spendA * FEE)), 0)}</span>`;
     };
 
     const body = list.map(d => {
@@ -931,9 +932,9 @@
         <td>${fmt.money(a.spendA)}</td>
         <td class="dim">${fmt.num(a.p0)}</td>
         <td>${a.p0 ? fmt.money(a.spendA / a.p0) : '—'}</td>
-        <td>${ratePill(okSp(a.spendA) ? a.n[0] / a.spendA : null)}</td>
+        <td>${ratePill(okSp(a.spendA) ? (a.n[0] / (a.spendA * FEE)) : null)}</td>
         ${OFFS_SHOW.slice(1).map(k => `<td>${rateAt(a, k, d)}</td>`).join('')}
-        <td><b>${okSp(a.spendA) ? fmt.pct(cumAll / a.spendA, 0) : '—'}</b></td>
+        <td><b>${okSp(a.spendA) ? fmt.pct((cumAll / (a.spendA * FEE)), 0) : '—'}</b></td>
       </tr>`;
     }).join('');
 
@@ -953,7 +954,7 @@
       });
       if (!okSp(sp)) return '<span class="dim">—</span>';
       const partial = ds.length < list.length ? `<small class="dim"> ${ds.length}/${list.length} 天</small>` : '';
-      return `${fmt.pct(nn / sp, 0)}${partial}`;
+      return `${fmt.pct((nn / (sp * FEE)), 0)}${partial}`;
     };
     const totCum = tot.n.reduce((a, b) => a + b, 0);
 
@@ -998,11 +999,11 @@
           <td>${fmt.money(tot.spend)}</td>
           <td>${fmt.num(tot.p0)}</td>
           <td>${tot.p0 ? fmt.money(tot.spend / tot.p0) : '—'}</td>
-          <td>${ratePill(okSp(tot.spend) ? tot.n[0] / tot.spend : null)}</td>
+          <td>${ratePill(okSp(tot.spend) ? (tot.n[0] / (tot.spend * FEE)) : null)}</td>
           <td>${footRate(1)}</td>
           <td>${footRate(3)}</td>
           <td>${footRate(7)}</td>
-          <td>${okSp(tot.spend) ? fmt.pct(totCum / tot.spend, 0) : '—'}</td>
+          <td>${okSp(tot.spend) ? fmt.pct((totCum / (tot.spend * FEE)), 0) : '—'}</td>
         </tr></tfoot>
       </table></div>${gapNote}` : ''}
     </article>`;
@@ -1312,7 +1313,7 @@
       lv, top,
       body: renderRows(lv, top, 0),
       total,
-      rate: okSp(total.spend) ? total.n0 / total.spend : null
+      rate: okSp(total.spend) ? (total.n0 / (total.spend * FEE)) : null
     };
   }
 
@@ -1360,7 +1361,7 @@
     if (!node) return '';
     const dates = fd;
     const sp = dates.map(d => (node.byDay.get(d) || {}).spend || 0);
-    const rt = dates.map(d => { const x = node.byDay.get(d); return x && okSp(x.spend) ? x.n0 / x.spend : null; });
+    const rt = dates.map(d => { const x = node.byDay.get(d); return x && okSp(x.spend) ? (x.n0 / (x.spend * FEE)) : null; });
 
     const spendChart = chartHTML({
       H: 150, dates,
@@ -1785,7 +1786,7 @@
         <li><b>D0 净回收率</b> = 安装当天净回收 / 当天花费。<b>50% 为正常参考值</b>，任何国家同一标准。</li>
         <li><b>D1 / D3 / D7</b> = 同一批新增在往后第 1/3/7 天的净回收额。</li>
         <li><b>Cohort 累计回收</b> = 那一天的新增，从 D0 到报表日的累计净回收 ÷ 那天的花费。各批观察期不同，越新越低是正常的。</li>
-        <li><b>净回收</b> = Google Play ×0.70 + Stripe ×0.97（已扣渠道分成），剔除内部/测试账号。</li>
+        <li><b>净回收</b> = Google Play ×0.70 + Stripe ×0.70（均按 30% 抽成），剔除内部/测试账号。；回收率分母 = Meta spend ×1.05（含代理服务费 5%）。</li>
         <li><b>单个新增付费用户成本</b> = 花费 / D0 付费人数。只看趋势，不设基线。</li>
         <li><b>灯</b>：D0 ≥ ${fmt.pct(LIGHT.ok, 0)} 绿、${fmt.pct(LIGHT.warn, 0)}–${fmt.pct(LIGHT.ok, 0)} 黄、&lt; ${fmt.pct(LIGHT.warn, 0)} 红；样本太小的产品不打灯。</li>
         <li><b>消耗只看趋势</b>：每日花费是 Meta 实时拉的账单数，不再拿它跟固定预算比；预算只在预算卡里按账户看完成度。</li>
