@@ -1753,13 +1753,13 @@
       `花费 <b>${hms(M.spend_pulled_at || M.generated_at)}</b>` +
       ` · 回收实时 <b>${hms(M.live_revenue_at || M.generated_at)}</b>`);
 
-    const sched = (M.refresh_hours_bj && M.refresh_hours_bj.length ? M.refresh_hours_bj : [0, 6, 9, 11, 13, 15, 17, 19, 21]).slice().sort((a, b) => a - b);
+    const sched = (M.refresh_hours_bj && M.refresh_hours_bj.length ? M.refresh_hours_bj : [0, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]).slice().sort((a, b) => a - b);
     const bjNow = new Date(Date.now() + 8 * 3600e3);
     const curH = bjNow.getUTCHours() + bjNow.getUTCMinutes() / 60;
     const nh = sched.find(h => h > curH);
     const p2 = n => String(n).padStart(2, '0');
     const nextTxt = nh === undefined ? `明天 ${p2(sched[0])}:00` : `${p2(nh)}:00`;
-    put('nextRefresh', `刷新 0/6/9 点起每2小时至21点 · 下次 <b>${nextTxt}</b>`);
+    put('nextRefresh', `刷新 0/6 点 + 白天 8–22 每小时 · 下次 <b>${nextTxt}</b>`);
 
     const fc = document.getElementById('footCount');
     if (fc) fc.textContent = `${DATES[0]} ~ ${TODAY} · ${ALL.length} 行 · 回收明细到 ${REV_UNTIL}`;
@@ -1806,7 +1806,7 @@
 
       <h3>数据更新</h3>
       <ul>
-        <li>北京时间 0、6、9 点，之后每 2 小时至 21 点自动刷新（0/6/9/11/13/15/17/19/21）；夜里不加频。</li>
+        <li>北京时间 0、6 点，白天 8–22 点每小时自动刷新（0/6/8–22）；夜里不加频。</li>
         <li>0 点是日切后第一刷，此时更新「今天」。</li>
         <li>数据非实时秒级，以顶栏「数据更新于」时间为准。</li>
         <li>顶栏「拉取最新」：默认立刻重载已发布的最新包（去缓存）。若本机已配置后台 webhook，会先触发 box 真拉 Meta/回收再自动等待更新。</li>
