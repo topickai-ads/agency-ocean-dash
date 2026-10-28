@@ -1451,12 +1451,7 @@
 
     main.innerHTML = `
       <section class="sect">
-        ${sec('01', '核心问题', `只看当天和昨天 · 逐条事实，不拿区间平均下判断`, '')}
-        ${issuesCard(wd, focusIdx)}
-      </section>
-
-      <section class="sect">
-        ${sec('02', '预算 · 消耗 · D0 回收率',
+        ${sec('01', '预算 · 消耗 · D0 回收率',
           `左表：产品 → 账户 → campaign 逐层展开${IS_AG ? '' : ' · 含自投 zt'} · 右图：每日花费走势`,
           budFocus
             ? `<b>${fmt.money(cur.spendA)}</b> / ${fmt.money(budFocus)} · 消耗比例 ${fmt.pct(usedNow, 0)}`
@@ -1468,7 +1463,7 @@
       </section>
 
       <section class="sect">
-        ${sec('03', '回收情况', `当日快照 + 逐日走势 · 只算 ${AG} 自己的量 · D0 基准 ${fmt.pct(BENCH, 0)}`, '')}
+        ${sec('02', '回收情况', `当日快照 + 逐日走势 · 只算 ${AG} 自己的量 · D0 基准 ${fmt.pct(BENCH, 0)}`, '')}
         ${snapStrip(daily, focusIdx)}
         <div class="row-mini">${recoveryCards(wd, focusIdx)}</div>
         ${detailCard(wd)}
@@ -1497,7 +1492,7 @@
 
     main.innerHTML = `
       <section class="sect">
-        ${sec('04', '四层明细',
+        ${sec('03', '四层明细',
           `账号 → Campaign → Adset → Ad，只列当天在投的 · 行首灯 = 当天 D0（≥${fmt.pct(LIGHT.ok, 0)} 绿 · ${fmt.pct(LIGHT.warn, 0)}–${fmt.pct(LIGHT.ok, 0)} 黄 · &lt;${fmt.pct(LIGHT.warn, 0)} 红）· 层级按钮上的数字 = 红灯行占该层花费`,
           `${fmt.md(day)}${day === TODAY ? ' 盘中' : ''} · 花费 ${fmt.money((() => { let v = 0; for (const r of ALL) if (r.lv === 'campaign' && r.d === day && match(r, {})) v += r.spend; return v; })())}`)}
         <article class="card">
