@@ -1261,7 +1261,9 @@
       : l === 'campaign' ? (o.camp || '—')
         : l === 'adset' ? (o.ads || '(未命名)') : (o.ad || '(未命名)');
 
-    const extraOf = (o, l) => {
+    // 每层只显示本层名，不再拼上层名
+    const extraOf = () => '';
+    const _extraOfOld = (o, l) => {
       if (l === 'account') {
         const a = acctMeta(o.acc) || {};
         const p = (PRODUCTS.find(x => x.id === a.product) || {}).short || a.product || '';
