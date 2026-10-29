@@ -1308,8 +1308,8 @@
       const strong = rowLv === 'account' || rowLv === 'campaign';
       return `<tr class="lv-${rowLv} d${depth} ${isFocus ? 'is-focus' : ''}" data-lv="${rowLv}" data-key="${encodeURIComponent(key)}" data-node="${encodeURIComponent(o.key)}" data-name="${esc(label)}" data-extra="${esc(extra || '')}">
         <td class="tree-cell" style="padding-left:${10 + Math.min(depth, 3) * 12}px">
-          ${lamp(o.d0)}${caret}${stBadge(o, rowLv)}
-          <span class="txt" title="${esc(label)}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>
+          ${lamp(o.d0)}${caret}
+          <span class="txt" title="${esc(label)}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>${stBadge(o, rowLv)}
         </td>
         <td>${ratePill(o.d0)}${o.est ? '<i class="est" title="这天没有这一条的回收归属，按花费分摊">估</i>' : ''}</td>
         <td>${fmt.money(o.spend)}</td>
@@ -1336,7 +1336,7 @@
       let m = 0;
       for (const o of list) {
         const strong = l === 'account' || l === 'campaign';
-        const w = 10 + Math.min(depth, 3) * 12 + 8 + 8 + 15 + 3 + textW(nameOf(o, l), strong) + 10 + 6 + (onOf(o, l) ? 26 : 0);
+        const w = 10 + Math.min(depth, 3) * 12 + 8 + 8 + 15 + 3 + textW(nameOf(o, l), strong) + 10 + 6 + (onOf(o, l) ? 36 : 0);
         if (w > m) m = w;
         const kids = kidsOfRow(o, l);
         if (kids.length) m = Math.max(m, measureAll(TREE[l], kids, depth + 1));
