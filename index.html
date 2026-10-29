@@ -122,11 +122,12 @@ async function tryOne(pw,entry){
  const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveKey"]);
  const k=await crypto.subtle.deriveKey({name:"PBKDF2",salt:b(entry.salt),iterations:entry.iter||200000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["decrypt"]);
  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:b(entry.iv)},k,b(entry.ct));
+ if(entry.z){const ds=new Blob([pt]).stream().pipeThrough(new DecompressionStream("gzip"));return JSON.parse(await new Response(ds).text());}
  return JSON.parse(new TextDecoder().decode(pt));}
 async function dec(pw){const E=window.DASHBOARD_ENC;
  if(E&&E.keys&&E.keys.length){
-  let last;for(const entry of E.keys){try{return await tryOne(pw,entry);}catch(e){last=e;}}
-  throw last||new Error("decrypt failed");}
+  try{return await Promise.any(E.keys.map(entry=>tryOne(pw,entry)));}
+  catch(e){throw (e&&e.errors&&e.errors[0])||new Error("decrypt failed");}}
  return tryOne(pw,E);}
 const AK="agency_dash_ak",TTL=7*24*3600*1000,HOOK="agency_dash_hook";
 function saveAk(pw){localStorage.setItem(AK,JSON.stringify({v:pw,exp:Date.now()+TTL}));}
