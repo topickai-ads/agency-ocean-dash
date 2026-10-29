@@ -1171,6 +1171,7 @@
     const tgtIdx = LEVELS.indexOf(lv);
     let tgt = kidsOf(lv);
     const STM = (D && D.meta && D.meta.status) || null;
+    const SEP = '\x01'; /* 须在 onOf 之前声明：原先在后面 → 不含暂停时 onOf 读到 TDZ 抛错，筛选点了无效 */
     const onOf = (o, l) => {
       if (!STM) return null;
       const m = STM[o.acc];
@@ -1203,13 +1204,14 @@
       state.open.clear();
       for (let i = 0; i < tgtIdx; i++) keep[LEVELS[i]].forEach(k => state.open.add(LEVELS[i] + '|' + k));
     }
-    const top = kidsOf('account').filter(o => keep.account.has(o.key));
+    const offOK = (o, l) => state.offFilter !== 'exclude' || (onOf(o, l) || {}).on !== false;
+    const top = kidsOf('account').filter(o => keep.account.has(o.key) && offOK(o, 'account'));
     const kidsOfRow = (o, l) => {
       const childLv = TREE[l];
       if (!childLv) return [];
       let ks = kidsOf(childLv).filter(r => parentKey(childLv, r) === o.key);
       if (LEVELS.indexOf(childLv) <= tgtIdx) ks = ks.filter(r => keep[childLv].has(r.key));
-      else if (state.offFilter === 'exclude') ks = ks.filter(r => (onOf(r, childLv) || {}).on !== false); /* 不含暂停：展开出的下层关行也滤掉 */
+      ks = ks.filter(r => offOK(r, childLv)); /* 不含暂停：整棵可见树（祖先/目标层/展开子层）关行全滤 */
       return ks;
     };
 
@@ -1231,7 +1233,6 @@
     };
 
     /* Meta 开/关：最近一次 pull 的 effective_status（meta.status），级联——上级关则下级显示关；无数据=不显示 */
-    const SEP = '\x01';
     const stBadge = (o, l) => {
       const s = onOf(o, l);
       return '';
