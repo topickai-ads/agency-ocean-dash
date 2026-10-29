@@ -1286,11 +1286,12 @@
       if (l === 'adset' || l === 'ad') chain.push(['组', (m.s || {})[(o.camp || '') + SEP + (o.ads || '')]]);
       if (l === 'ad') chain.push(['广告', (m.d || {})[(o.camp || '') + SEP + (o.ads || '') + SEP + (o.ad || '')]]);
       const own = chain[chain.length - 1][1];
-      for (let i = 0; i < chain.length - 1; i++) {
+      for (let i = 1; i < chain.length - 1; i++) { /* 账户层不级联：代理户 account_status 常为 2 不可靠 */
         const r = chain[i][1];
         if (r != null && r !== 'ACTIVE') return { on: false, tip: `关 · 上级${chain[i][0]}：${r}` + (own ? ` · 本层：${own}` : '') };
       }
       if (own == null) return null;
+      if (l === 'account') return { on: own === 'ACTIVE', tip: (own === 'ACTIVE' ? '开' : '关') + ` · 账户 raw account_status=${m.a}（不级联子层）` + (m.t ? ` · 拉取于 ${m.t}` : '') };
       return { on: own === 'ACTIVE', tip: (own === 'ACTIVE' ? '开' : '关') + ` · ${own}` + (m.t ? ` · 拉取于 ${m.t}` : '') };
     };
     const stBadge = (o, l) => {
