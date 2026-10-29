@@ -6,6 +6,19 @@
 <title>投放效果看板 · Ocean</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563eb'/%3E%3Cpath d='M9 22V11m4.7 11V7m4.6 15v-8m4.7 8V10' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/style.css?v=3d2e5ac884">
+<style>
+#pullBtn{position:relative;overflow:hidden}
+#pullBtn .pull-progress{position:absolute;left:0;right:0;bottom:0;height:3px;opacity:0;pointer-events:none}
+#pullBtn .pull-progress i{position:absolute;top:0;bottom:0;width:40%;background:currentColor;border-radius:2px}
+#pullBtn.is-pulling{cursor:progress;opacity:.9}
+#pullBtn.is-pulling .pull-progress{opacity:.85}
+#pullBtn.is-pulling .pull-progress i{animation:pullIndet 1.2s ease-in-out infinite}
+#pullBtn.is-flash .pull-progress{opacity:1}
+#pullBtn.is-flash .pull-progress i{left:0;width:100%}
+#pullBtn.is-flash{animation:pullFlash .5s ease-in-out 2}
+@keyframes pullIndet{0%{left:-40%}100%{left:100%}}
+@keyframes pullFlash{0%,100%{filter:brightness(1)}50%{filter:brightness(1.6);box-shadow:0 0 0 2px rgba(120,180,255,.6)}}
+</style>
 </head>
 <body>
 <header class="top">
@@ -80,13 +93,7 @@
   <div class="drawer-body" id="drawerBody"></div>
 </aside>
 
-<div id="pullOverlay" class="pull-overlay" hidden>
-  <div class="pull-overlay-inner">
-    <div class="gate-spin" aria-hidden="true"></div>
-    <div class="pull-overlay-title" id="pullOverlayTitle">正在拉取最新数据</div>
-    <div class="pull-overlay-sub" id="pullOverlaySub">后台刷新中，完成后会自动刷新页面</div>
-  </div>
-</div>
+
 <div id="gate" class="gate" aria-live="polite">
   <div id="gateLoad" class="gate-load">
     <div class="gate-load-mark mark" aria-hidden="true">
@@ -201,30 +208,29 @@ async function go(pw, fromSaved){
 function setPullLabel(t,busy){
  const btn=document.getElementById("pullBtn");
  if(!btn) return;
- btn.textContent=t;
+ let lb=btn.querySelector(".pull-label");
+ if(!lb){btn.textContent="";lb=document.createElement("span");lb.className="pull-label";btn.appendChild(lb);const bar=document.createElement("span");bar.className="pull-progress";bar.innerHTML='<i></i>';btn.appendChild(bar);}
+ lb.textContent=t;
  btn.disabled=!!busy;
  btn.classList.toggle("is-busy",!!busy);
+ btn.classList.toggle("is-pulling",!!busy);
 }
-function showPullOverlay(on, title, sub){
- const ov=document.getElementById("pullOverlay");
- if(!ov) return;
- ov.hidden=!on;
- document.body.classList.toggle("is-pulling", !!on);
- const t=document.getElementById("pullOverlayTitle");
- const s=document.getElementById("pullOverlaySub");
- if(t&&title!=null) t.textContent=title;
- if(s&&sub!=null) s.textContent=sub;
+function showPullOverlay(){ /* 已弃用：主反馈改在按钮进度态 */ }
+function flashPullBtn(){
+ const btn=document.getElementById("pullBtn");
+ return new Promise(r=>{ if(!btn) return r(); btn.classList.remove("is-pulling"); btn.classList.add("is-flash"); setTimeout(r,1100); });
 }
 async function wirePull(){
  const btn=document.getElementById("pullBtn");
  if(!btn||btn.dataset.wired) return;
  btn.dataset.wired="1";
+ setPullLabel("拉取最新",false);
+ const fail=(t)=>{btn.classList.remove("is-flash");setPullLabel(t,false);setTimeout(()=>setPullLabel("拉取最新",false),4000);};
  btn.addEventListener("click",async()=>{
-  if(btn.disabled||document.body.classList.contains("is-pulling")) return;
-  setPullLabel("拉取中…",true);
+  if(btn.disabled||btn.classList.contains("is-pulling")) return;
+  setPullLabel("拉取中",true);
   const hook=loadHook();
   const isWh=!!(hook&&hook.kind==="webhook"&&hook.url);
-  showPullOverlay(true, "正在拉取最新数据", isWh?"已立刻触发后台拉数，通常 1–2 分钟完成":"已发信号；后台约每 5 分钟扫一次，扫到后会拉数并自动刷新");
   let hooked=false;
   if(hook&&hook.kind==="ntfy"&&hook.topic){
    try{
@@ -242,18 +248,10 @@ async function wirePull(){
     try{await fetch(hook.url,{method:"POST",mode:"no-cors",headers:hdr,body:"agency-dash-refresh"});hooked=true;}catch(e2){console.warn(e2);}
    }
   }
-  if(!hooked){
-   showPullOverlay(false);
-   setPullLabel("未接通真拉",false);
-   setTimeout(()=>setPullLabel("拉取最新",false),3500);
-   return;
-  }
-  setPullLabel("后台刷新中…",true);
-  showPullOverlay(true, "正在拉取最新数据", isWh?"后台已开始拉数，完成后会自动刷新…":"信号已发出，等待后台扫到并完成拉数…");
+  if(!hooked){ fail("拉取失败，请重试"); return; }
   const pw=loadAk();
   const prevAt=(window.DASHBOARD_DATA&&window.DASHBOARD_DATA.meta&&window.DASHBOARD_DATA.meta.generated_at)||"";
   const started=Date.now();
-  // webhook 一点即拉；ntfy 轮询最慢约 5 分钟。整轮约 0.5–2 分钟，等满约 6 分钟才超时。
   const maxMs=6*60*1000;
   await new Promise(r=>setTimeout(r,3000));
   while(Date.now()-started<maxMs){
@@ -266,22 +264,16 @@ async function wirePull(){
     ]);
     const at=data&&data.meta&&data.meta.generated_at;
     if(at&&at!==prevAt){
-     showPullOverlay(true, "数据已更新", "正在刷新页面…");
+     setPullLabel("已更新",true);
+     await flashPullBtn();
      sessionStorage.setItem("agency_dash_bust",String(Date.now()));
      location.reload();
      return;
     }
    }catch(e){console.warn(e);}
-   const sec=Math.round((Date.now()-started)/1000);
-   const tip=sec<60
-     ? ("已通知后台，正在等待扫到信号（约每 5 分钟一档；已等 "+sec+" 秒）…")
-     : ("后台刷新中（已等待 "+sec+" 秒，最多约 6 分钟）…");
-   showPullOverlay(true, "正在拉取最新数据", tip);
    await new Promise(r=>setTimeout(r,3000));
   }
-  showPullOverlay(false);
-  setPullLabel("超时未更新（后台可能仍在跑，1–2 分钟后再硬刷）",false);
-  setTimeout(()=>setPullLabel("拉取最新",false),6000);
+  fail("超时未更新，稍后再试");
  });
 }
 const u=new URL(location.href),q=u.searchParams.get("k");
