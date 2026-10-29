@@ -1209,6 +1209,7 @@
       if (!childLv) return [];
       let ks = kidsOf(childLv).filter(r => parentKey(childLv, r) === o.key);
       if (LEVELS.indexOf(childLv) <= tgtIdx) ks = ks.filter(r => keep[childLv].has(r.key));
+      else if (state.offFilter === 'exclude') ks = ks.filter(r => (onOf(r, childLv) || {}).on !== false); /* 不含暂停：展开出的下层关行也滤掉 */
       return ks;
     };
 
