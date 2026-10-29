@@ -41,6 +41,7 @@
     q: '',
     level: 'account',
     open: new Set(),
+    _autoOpen: true,
     focus: null,
     detail: true,
     tab: 'overview',      // overview(预算及消耗下钻) | recovery(回收及明细)
@@ -1164,14 +1165,29 @@
       if (!cache[l]) cache[l] = groupRows(l, [day], { withQ: true });
       return cache[l];
     };
-    /* 复合筛选：层级 + 颜色，只滤当前层级的行（无有效 d0 的在选色时不显示），不自动展开 */
-    let top = groupRows(lv, [day], { withQ: true });
-    if (TF) top = top.filter(o => o.d0 != null && tone(o.d0) === TF);
-    if (!top.length) return null;
+    /* 层级 = 展开目标深度；颜色只滤目标层。树永远从 account 画起，祖先仅在有可见目标层子孙时显示 */
+    const tgtIdx = LEVELS.indexOf(lv);
+    let tgt = kidsOf(lv);
+    if (TF) tgt = tgt.filter(o => o.d0 != null && tone(o.d0) === TF);
+    if (!tgt.length) return null;
+    const keep = {}; LEVELS.forEach(l => { keep[l] = new Set(); });
+    tgt.forEach(o => keep[lv].add(o.key));
+    for (let i = tgtIdx; i > 0; i--) {
+      const l = LEVELS[i], P = LEVELS[i - 1];
+      kidsOf(l).forEach(r => { if (keep[l].has(r.key)) keep[P].add(parentKey(l, r)); });
+    }
+    if (state._autoOpen) {
+      state._autoOpen = false;
+      state.open.clear();
+      state._autoOpen = true;
+      for (let i = 0; i < tgtIdx; i++) keep[LEVELS[i]].forEach(k => state.open.add(LEVELS[i] + '|' + k));
+    }
+    const top = kidsOf('account').filter(o => keep.account.has(o.key));
     const kidsOfRow = (o, l) => {
       const childLv = TREE[l];
       if (!childLv) return [];
-      const ks = kidsOf(childLv).filter(r => parentKey(childLv, r) === o.key);
+      let ks = kidsOf(childLv).filter(r => parentKey(childLv, r) === o.key);
+      if (LEVELS.indexOf(childLv) <= tgtIdx) ks = ks.filter(r => keep[childLv].has(r.key));
       return ks;
     };
 
@@ -1262,15 +1278,15 @@
       return m;
     };
 
-    const total = top.reduce((a, o) => {
+    const total = tgt.reduce((a, o) => {
       a.spend += o.spend; a.p0 += o.p0; a.n0 += o.n[0];
       return a;
     }, { spend: 0, p0: 0, n0: 0 });
 
     return {
-      lv, top, tf: TF,
-      nameW: Math.ceil(measureAll(lv, top, 0)),
-      body: renderRows(lv, top, 0),
+      lv, top: tgt, tf: TF,
+      nameW: Math.ceil(measureAll('account', top, 0)),
+      body: renderRows('account', top, 0),
       total,
       rate: okSp(total.spend) ? (total.n0 / (total.spend * FEE)) : null
     };
@@ -1551,6 +1567,7 @@
     $$('#productSeg button').forEach(b => b.addEventListener('click', () => {
       state.product = b.dataset.product;
       state.open.clear();
+      state._autoOpen = true;
       state.focus = null;
       state.toneFilter = null;
       syncControls();
@@ -1560,6 +1577,7 @@
     $$('#rangeSeg button').forEach(b => b.addEventListener('click', () => {
       state.view = b.dataset.view;
       state.open.clear();
+      state._autoOpen = true;
       state.focus = null;
       state.toneFilter = null;
       syncControls();
@@ -1583,6 +1601,7 @@
         if (!dpIn.value) return;
         state.view = 'd:' + dpIn.value;
         state.open.clear();
+        state._autoOpen = true;
         state.focus = null;
         state.toneFilter = null;
         syncControls();
@@ -1602,6 +1621,7 @@
         state.toneFilter = null;
         state.focus = null;
         state.open.clear();
+        state._autoOpen = true;
         render();
       });
     }
@@ -1657,6 +1677,7 @@
       if (tfBtn) {
         state.toneFilter = tfBtn.dataset.tone || null;
         state.focus = null;
+        state._autoOpen = true;
         $$('#toneFilter button').forEach(b => b.classList.toggle('is-active', (b.dataset.tone || null) === state.toneFilter));
         const body = document.getElementById('drillBody');
         if (body) { body.innerHTML = drillBody(CUR_DAY, CUR_WIN); mountCharts(); } else render();
@@ -1666,6 +1687,7 @@
       if (lvBtn) {
         state.level = lvBtn.dataset.level;
         state.open.clear();
+        state._autoOpen = true;
         state.focus = null;
         render();
         return;
