@@ -46,6 +46,7 @@
     detail: true,
     tab: 'overview',      // overview(预算及消耗下钻) | recovery(回收及明细)
     drillDay: null,
+    spendMin: null,       // null=全部 | 50 | 100 | 200：只滤当前层级 spend > 阈值，与颜色 AND
     toneFilter: null      // null=全部 | 'bad' | 'warn' | 'ok'：与 level 复合，只滤当前层级
   };
 
@@ -1169,6 +1170,7 @@
     const tgtIdx = LEVELS.indexOf(lv);
     let tgt = kidsOf(lv);
     if (TF) tgt = tgt.filter(o => o.d0 != null && tone(o.d0) === TF);
+    if (state.spendMin) tgt = tgt.filter(o => (o.spend || 0) > state.spendMin);
     if (!tgt.length) return null;
     const keep = {}; LEVELS.forEach(l => { keep[l] = new Set(); });
     tgt.forEach(o => keep[lv].add(o.key));
@@ -1314,7 +1316,7 @@
 
   function drillBody(day, win) {
     const c = drillCalc(day, win);
-    if (!c) return `<div class="empty">${fmt.md(day)} 这一天没有${state.toneFilter ? TF_NAME[state.toneFilter] + '灯的' : '在投的'}${LV_NAME[state.level]}${state.q ? '（已叠加搜索）' : ''}</div>`;
+    if (!c) return `<div class="empty">${fmt.md(day)} 这一天没有${state.spendMin ? '花费>$' + state.spendMin + '的' : ''}${state.toneFilter ? TF_NAME[state.toneFilter] + '灯的' : '在投的'}${LV_NAME[state.level]}${state.q ? '（已叠加搜索）' : ''}</div>`;
 
     return `<div class="table-wrap"><table class="d drill-t" style="--name-col-w:${c.nameW}px">
       <colgroup>
@@ -1487,6 +1489,9 @@
             <div class="seg tonef" id="toneFilter">
               ${[[null, '全部'], ['bad', '红'], ['warn', '黄'], ['ok', '绿']].map(([t, n]) => `<button data-tone="${t || ''}" class="${state.toneFilter === t ? 'is-active' : ''}">${t ? `<i class="tdot ${t}"></i>` : ''}${n}</button>`).join('')}
             </div>
+            <div class="seg tonef" id="spendFilter">
+              ${[[null, '全部'], [50, '>$50'], [100, '>$100'], [200, '>$200']].map(([v, n]) => `<button data-spend="${v || ''}" class="${state.spendMin === v ? 'is-active' : ''}">${n}</button>`).join('')}
+            </div>
             <div class="search">
               <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="m16.5 16.5 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
               <input id="drillQ" type="search" placeholder="搜账号 / campaign / adset / ad" value="${esc(state.q)}">
@@ -1568,7 +1573,7 @@
       state.open.clear();
       state._autoOpen = true;
       state.focus = null;
-      state.toneFilter = null;
+      state.toneFilter = null; state.spendMin = null;
       syncControls();
       render();
     }));
@@ -1578,7 +1583,7 @@
       state.open.clear();
       state._autoOpen = true;
       state.focus = null;
-      state.toneFilter = null;
+      state.toneFilter = null; state.spendMin = null;
       syncControls();
       render();
     }));
@@ -1602,7 +1607,7 @@
         state.open.clear();
         state._autoOpen = true;
         state.focus = null;
-        state.toneFilter = null;
+        state.toneFilter = null; state.spendMin = null;
         syncControls();
         render();
       });
@@ -1617,7 +1622,7 @@
         const b = e.target.closest('button[data-tab]');
         if (!b) return;
         state.tab = b.dataset.tab;
-        state.toneFilter = null;
+        state.toneFilter = null; state.spendMin = null;
         state.focus = null;
         state.open.clear();
         state._autoOpen = true;
@@ -1670,6 +1675,16 @@
         const k = decodeURIComponent(caret.dataset.k);
         if (state.open.has(k)) state.open.delete(k); else state.open.add(k);
         refreshDrill();
+        return;
+      }
+      const spBtn = e.target.closest('#spendFilter button');
+      if (spBtn) {
+        state.spendMin = spBtn.dataset.spend ? +spBtn.dataset.spend : null;
+        state.focus = null;
+        state._autoOpen = true;
+        $$('#spendFilter button').forEach(b => b.classList.toggle('is-active', (b.dataset.spend ? +b.dataset.spend : null) === state.spendMin));
+        const body = document.getElementById('drillBody');
+        if (body) { body.innerHTML = drillBody(CUR_DAY, CUR_WIN); mountCharts(); } else render();
         return;
       }
       const tfBtn = e.target.closest('#toneFilter button');
