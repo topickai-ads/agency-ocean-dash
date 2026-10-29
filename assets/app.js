@@ -1274,6 +1274,30 @@
       return o.ads || '';
     };
 
+    /* Meta 开/关：最近一次 pull 的 effective_status（meta.status），级联——上级关则下级显示关；无数据=不显示 */
+    const STM = (D && D.meta && D.meta.status) || null;
+    const SEP = '\x01';
+    const onOf = (o, l) => {
+      if (!STM) return null;
+      const m = STM[o.acc];
+      if (!m) return null;
+      const chain = [['账户', m.a == null ? null : (m.a === 1 ? 'ACTIVE' : 'account_status=' + m.a)]];
+      if (l !== 'account') chain.push(['系列', (m.c || {})[o.camp || '']]);
+      if (l === 'adset' || l === 'ad') chain.push(['组', (m.s || {})[(o.camp || '') + SEP + (o.ads || '')]]);
+      if (l === 'ad') chain.push(['广告', (m.d || {})[(o.camp || '') + SEP + (o.ads || '') + SEP + (o.ad || '')]]);
+      const own = chain[chain.length - 1][1];
+      for (let i = 0; i < chain.length - 1; i++) {
+        const r = chain[i][1];
+        if (r != null && r !== 'ACTIVE') return { on: false, tip: `关 · 上级${chain[i][0]}：${r}` + (own ? ` · 本层：${own}` : '') };
+      }
+      if (own == null) return null;
+      return { on: own === 'ACTIVE', tip: (own === 'ACTIVE' ? '开' : '关') + ` · ${own}` + (m.t ? ` · 拉取于 ${m.t}` : '') };
+    };
+    const stBadge = (o, l) => {
+      const s = onOf(o, l);
+      return s ? `<i class="st-tag ${s.on ? 'on' : 'off'}" title="${esc(s.tip)}">${s.on ? '开' : '关'}</i>` : '';
+    };
+
     const rowHTML = (o, rowLv, label, extra, hasChild, key, depth) => {
       const net7 = win.map(d => (o.byDay.get(d) || {}).n0 || 0);
       const caret = hasChild
@@ -1283,7 +1307,7 @@
       const strong = rowLv === 'account' || rowLv === 'campaign';
       return `<tr class="lv-${rowLv} d${depth} ${isFocus ? 'is-focus' : ''}" data-lv="${rowLv}" data-key="${encodeURIComponent(key)}" data-node="${encodeURIComponent(o.key)}" data-name="${esc(label)}" data-extra="${esc(extra || '')}">
         <td class="tree-cell" style="padding-left:${10 + Math.min(depth, 3) * 12}px">
-          ${lamp(o.d0)}${caret}
+          ${lamp(o.d0)}${caret}${stBadge(o, rowLv)}
           <span class="txt" title="${esc(label)}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>
         </td>
         <td>${ratePill(o.d0)}${o.est ? '<i class="est" title="这天没有这一条的回收归属，按花费分摊">估</i>' : ''}</td>
@@ -1311,7 +1335,7 @@
       let m = 0;
       for (const o of list) {
         const strong = l === 'account' || l === 'campaign';
-        const w = 10 + Math.min(depth, 3) * 12 + 8 + 8 + 15 + 3 + textW(nameOf(o, l), strong) + 10 + 6;
+        const w = 10 + Math.min(depth, 3) * 12 + 8 + 8 + 15 + 3 + textW(nameOf(o, l), strong) + 10 + 6 + (onOf(o, l) ? 26 : 0);
         if (w > m) m = w;
         const kids = kidsOfRow(o, l);
         if (kids.length) m = Math.max(m, measureAll(TREE[l], kids, depth + 1));
