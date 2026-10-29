@@ -1306,6 +1306,19 @@
       return out;
     };
 
+    /* 名字列定宽：遍历整棵树（不论是否展开）量最长名，展开/收合不影响这个值 */
+    const measureAll = (l, list, depth) => {
+      let m = 0;
+      for (const o of list) {
+        const strong = l === 'account' || l === 'campaign';
+        const w = 10 + Math.min(depth, 3) * 12 + 8 + 8 + 15 + 3 + textW(nameOf(o, l), strong) + 10 + 6;
+        if (w > m) m = w;
+        const kids = kidsOfRow(o, l);
+        if (kids.length) m = Math.max(m, measureAll(TREE[l], kids, depth + 1));
+      }
+      return m;
+    };
+
     const total = top.reduce((a, o) => {
       a.spend += o.spend; a.p0 += o.p0; a.n0 += o.n[0];
       return a;
@@ -1313,10 +1326,19 @@
 
     return {
       lv, top,
+      nameW: Math.ceil(measureAll(lv, top, 0)),
       body: renderRows(lv, top, 0),
       total,
       rate: okSp(total.spend) ? (total.n0 / (total.spend * FEE)) : null
     };
+  }
+
+  /* 离屏 canvas 量字宽（与 .txt 14px 字体一致） */
+  let _tw = null;
+  function textW(t, bold) {
+    if (!_tw) _tw = document.createElement('canvas').getContext('2d');
+    _tw.font = `${bold ? 660 : 400} 14px -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif`;
+    return _tw.measureText(String(t)).width;
   }
 
   function drillFootHTML(c) {
@@ -1335,7 +1357,7 @@
     const c = drillCalc(day, win);
     if (!c) return `<div class="empty">${fmt.md(day)} 这一天没有在投的${LV_NAME[state.level]}</div>`;
 
-    return `${okAdsPanel(day)}<div class="table-wrap"><table class="d drill-t">
+    return `${okAdsPanel(day)}<div class="table-wrap"><table class="d drill-t" style="--name-col-w:${c.nameW}px">
       <colgroup>
         <col class="c-name"><col class="c-rate"><col class="c-spend"><col class="c-d0">
         <col class="c-payers"><col class="c-cpa"><col class="c-spark">

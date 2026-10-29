@@ -1220,8 +1220,8 @@ body.is-pulling .top, body.is-pulling main, body.is-pulling .foot {
 table.d td.tree-cell > .txt { font-size: 14px; } /* 四层名字放大 */
 /* D0 率贴名字：名字列宽 = 本表最长名，D0 率左对齐于名字列右缘；剩余宽度给末列 */
 table.d.drill-t { table-layout: auto; }
-table.d.drill-t col.c-name { width: 1%; }
-table.d.drill-t col.c-spark { width: auto; }
+/* 名字列宽 = 整树最长名（JS 渲染时一次写入 --name-col-w），展开收合不变，D0 列不动 */
+table.d.drill-t col.c-name { width: var(--name-col-w, 240px); }
+table.d.drill-t td.tree-cell { min-width: var(--name-col-w, 240px); box-sizing: border-box; }
 table.d.drill-t td.tree-cell { max-width: none; overflow: visible; padding-right: 10px; }
 table.d.drill-t th:nth-child(2), table.d.drill-t td:nth-child(2) { text-align: left; padding-left: 4px; }
-table.d.drill-t .spark-cell { width: 100%; text-align: left; }
