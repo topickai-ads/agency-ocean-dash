@@ -1286,9 +1286,9 @@
           ${lamp(o.d0)}${caret}
           <span class="txt" title="${esc(label)}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>
         </td>
+        <td>${ratePill(o.d0)}${o.est ? '<i class="est" title="这天没有这一条的回收归属，按花费分摊">估</i>' : ''}</td>
         <td>${fmt.money(o.spend)}</td>
         <td><b>${fmt.money(o.n[0])}</b></td>
-        <td>${ratePill(o.d0)}${o.est ? '<i class="est" title="这天没有这一条的回收归属，按花费分摊">估</i>' : ''}</td>
         <td class="dim">${fmt.num(o.p0)}</td>
         <td>${o.cpa ? fmt.money(o.cpa) : '<span class="dim">—</span>'}</td>
         <td class="spark-cell">${sparkSvg(net7, { kind: 'bar', w: 62, h: 18, color: o.n[0] >= o.spend * BENCH ? '#a7e3c3' : '#f5c4bd' })}</td>
@@ -1322,9 +1322,9 @@
   function drillFootHTML(c) {
     return `<tr>
         <td class="tree-cell">${lamp(c.rate)}<span class="txt">${c.top.length} 条在投${LV_NAME[c.lv]}</span></td>
+        <td>${ratePill(c.rate)}</td>
         <td>${fmt.money(c.total.spend)}</td>
         <td>${fmt.money(c.total.n0)}</td>
-        <td>${ratePill(c.rate)}</td>
         <td>${fmt.num(c.total.p0)}</td>
         <td>${c.total.p0 ? fmt.money(c.total.spend / c.total.p0) : '—'}</td>
         <td></td>
@@ -1347,7 +1347,7 @@
           <th>近 ${win.length} 天 D0 净</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>花费</th><th>D0 净</th><th>D0 率</th><th>付费人</th><th>成本/人</th>
+          <th>账号 / Campaign / Adset / Ad</th><th>D0 率</th><th>花费</th><th>D0 净</th><th>付费人</th><th>成本/人</th>
           <th class="spark-cell">逐日</th>
         </tr>
       </thead>
