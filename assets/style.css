@@ -1227,3 +1227,18 @@ table.d.drill-t td.tree-cell { max-width: none; overflow: visible; padding-right
 table.d.drill-t th:nth-child(2), table.d.drill-t td:nth-child(2) { text-align: left; padding-left: 4px; }
 /* 四层 Meta 开/关小标签（最近一次拉取，级联） */
 table.d td.tree-cell .txt.is-off, table.d td.tree-cell .txt.is-off b { color: #8a93a0; text-decoration: line-through; }
+
+/* 只看红/黄/绿 */
+#toneFilter button { display: inline-flex; align-items: center; gap: 5px; }
+#toneFilter .tdot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; opacity: .85; }
+#toneFilter .tdot.bad { background: #f04438; }
+#toneFilter .tdot.warn { background: #f5a524; }
+#toneFilter .tdot.ok { background: #17b26a; }
+
+/* D0 达标 AD：四层路径展全，不裁切 */
+.ok-sub.ok-path, .ok-sub {
+  white-space: normal; overflow: visible; text-overflow: clip;
+  max-width: none; word-break: break-all; line-height: 1.45; margin-top: 2px;
+}
+.ok-path em { font-style: normal; color: var(--ink-4); opacity: .7; margin: 0 4px; }
+@media (max-width: 860px) { .ok-sub { max-width: none; } }

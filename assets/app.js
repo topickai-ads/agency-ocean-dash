@@ -45,7 +45,8 @@
     detail: true,
     tab: 'overview',      // overview(预算及消耗下钻) | recovery(回收及明细)
     drillDay: null,
-    okAll: false
+    okAll: false,
+    toneFilter: null      // null | 'bad' | 'warn' | 'ok'：只看红/黄/绿（ad 层）
   };
 
   const $ = s => document.querySelector(s);
@@ -1186,8 +1187,11 @@
             <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="m16.5 16.5 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
             <input id="drillQ" type="search" placeholder="搜账号 / campaign / adset / ad" value="${esc(state.q)}">
           </div>
+          <div class="seg tonef" id="toneFilter">
+            ${[['bad', '只看红'], ['warn', '只看黄'], ['ok', '只看绿']].map(([t, n]) => `<button data-tone="${t}" class="${state.toneFilter === t ? 'is-active' : ''}"><i class="tdot ${t}"></i>${n}</button>`).join('')}
+          </div>
           <div class="seg lamps" id="levelSeg">
-            ${LEVELS.map(l => `<button data-level="${l}" class="${state.level === l ? 'is-active' : ''}">${lamp(tones.get(l))}${LV_NAME[l]}<em>${fmt.pct(tones.get(l), 0)}</em></button>`).join('')}
+            ${LEVELS.map(l => `<button data-level="${l}" class="${!state.toneFilter && state.level === l ? 'is-active' : ''}">${lamp(tones.get(l))}${LV_NAME[l]}<em>${fmt.pct(tones.get(l), 0)}</em></button>`).join('')}
           </div>
         </div>
       </div>
@@ -1216,7 +1220,7 @@
     const rows = show.map(o => `<tr>
       <td>
         <div class="name-cell"><span class="txt" title="${esc(o.ad || '')}">${esc(o.ad || '(未命名)')}</span></div>
-        <div class="ok-sub">${esc(o.ads || '—')} · ${esc(o.camp || '—')}</div>
+        <div class="ok-sub ok-path"><span title="账号">${esc(o.acc || '—')}</span><em>→</em><span title="Campaign">${esc(o.camp || '—')}</span><em>→</em><span title="Adset">${esc(o.ads || '—')}</span><em>→</em><span title="Ad">${esc(o.ad || '(未命名)')}</span></div>
       </td>
       <td>${fmt.money(o.spend)}</td>
       <td><b>${fmt.money(o.n[0])}</b></td>
@@ -1233,7 +1237,7 @@
         <span class="dim" style="margin-left:auto">D0 ≥ ${fmt.pct(BENCH, 0)} · 付费 > ${OK_MIN_PAYERS} 人 · 花费 > ${fmt.money(OK_MIN_SPEND)}${ok.some(o => o.est) ? ' · 带「估」的按花费分摊' : ''}</span>
       </div>
       <div class="table-wrap"><table class="d okads-t">
-        <thead><tr><th>广告</th><th>花费</th><th>D0 净</th><th>D0 率</th><th>付费人</th><th>成本/人</th></tr></thead>
+        <thead><tr><th>广告（账号 → Campaign → Adset → Ad）</th><th>花费</th><th>D0 净</th><th>D0 率</th><th>付费人</th><th>成本/人</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
       ${ok.length > LIMIT ? `<button class="okmore" id="okMore">${state.okAll ? '收起' : `还有 ${ok.length - LIMIT} 条，展开`}</button>` : ''}
@@ -1242,19 +1246,34 @@
 
   /* 算一遍当前层级的行；drillBody（首次）和 refreshDrill（展开/选中）共用 */
   function drillCalc(day, win) {
-    const lv = state.level;
-    const top = groupRows(lv, [day], { withQ: true });
-    if (!top.length) return null;
-
+    const TF = state.toneFilter;
+    const lv = TF ? 'account' : state.level;
     const cache = {};
     const kidsOf = l => {
       if (!cache[l]) cache[l] = groupRows(l, [day], { withQ: true });
       return cache[l];
     };
+    /* 只看红/黄/绿：先滤 ad，再自底向上定可见祖先，并全部展开 */
+    let vis = null, visAds = null;
+    if (TF) {
+      visAds = kidsOf('ad').filter(o => o.d0 != null && tone(o.d0) === TF);
+      vis = { ad: new Set(visAds.map(o => o.key)) };
+      let childLv = 'ad';
+      for (const l of ['adset', 'campaign', 'account']) {
+        const pk = new Set(kidsOf(childLv).filter(r => vis[childLv].has(r.key)).map(r => parentKey(childLv, r)));
+        vis[l] = pk;
+        childLv = l;
+      }
+      for (const l of ['account', 'campaign', 'adset']) vis[l].forEach(k => state.open.add(k));
+    }
+    let top = groupRows(lv, [day], { withQ: true });
+    if (vis) top = top.filter(o => vis[lv].has(o.key));
+    if (!top.length) return null;
     const kidsOfRow = (o, l) => {
       const childLv = TREE[l];
       if (!childLv) return [];
-      return kidsOf(childLv).filter(r => parentKey(childLv, r) === o.key);
+      const ks = kidsOf(childLv).filter(r => parentKey(childLv, r) === o.key);
+      return vis ? ks.filter(r => vis[childLv].has(r.key)) : ks;
     };
 
     const nameOf = (o, l) => l === 'account' ? (o.acc || '—')
@@ -1344,13 +1363,13 @@
       return m;
     };
 
-    const total = top.reduce((a, o) => {
+    const total = (visAds || top).reduce((a, o) => {
       a.spend += o.spend; a.p0 += o.p0; a.n0 += o.n[0];
       return a;
     }, { spend: 0, p0: 0, n0: 0 });
 
     return {
-      lv, top,
+      lv, top, tf: TF, nAds: visAds ? visAds.length : null,
       nameW: Math.ceil(measureAll(lv, top, 0)),
       body: renderRows(lv, top, 0),
       total,
@@ -1366,9 +1385,10 @@
     return _tw.measureText(String(t)).width;
   }
 
+  const TF_NAME = { bad: '红', warn: '黄', ok: '绿' };
   function drillFootHTML(c) {
     return `<tr>
-        <td class="tree-cell">${lamp(c.rate)}<span class="txt">${c.top.length} 条在投${LV_NAME[c.lv]}</span></td>
+        <td class="tree-cell">${lamp(c.rate)}<span class="txt">${c.tf ? `${c.nAds} 条${TF_NAME[c.tf]}色 ad（合计按可见 ad）` : `${c.top.length} 条在投${LV_NAME[c.lv]}`}</span></td>
         <td>${ratePill(c.rate)}</td>
         <td>${fmt.money(c.total.spend)}</td>
         <td>${fmt.money(c.total.n0)}</td>
@@ -1380,7 +1400,9 @@
 
   function drillBody(day, win) {
     const c = drillCalc(day, win);
-    if (!c) return `<div class="empty">${fmt.md(day)} 这一天没有在投的${LV_NAME[state.level]}</div>`;
+    if (!c) return state.toneFilter
+      ? `${okAdsPanel(day)}<div class="empty">${fmt.md(day)} 当天没有${TF_NAME[state.toneFilter]}色广告${state.q ? '（已叠加搜索）' : ''}</div>`
+      : `<div class="empty">${fmt.md(day)} 这一天没有在投的${LV_NAME[state.level]}</div>`;
 
     return `${okAdsPanel(day)}<div class="table-wrap"><table class="d drill-t" style="--name-col-w:${c.nameW}px">
       <colgroup>
@@ -1634,6 +1656,7 @@
       state.product = b.dataset.product;
       state.open.clear();
       state.focus = null;
+      state.toneFilter = null;
       syncControls();
       render();
     }));
@@ -1642,6 +1665,7 @@
       state.view = b.dataset.view;
       state.open.clear();
       state.focus = null;
+      state.toneFilter = null;
       syncControls();
       render();
     }));
@@ -1664,6 +1688,7 @@
         state.view = 'd:' + dpIn.value;
         state.open.clear();
         state.focus = null;
+        state.toneFilter = null;
         syncControls();
         render();
       });
@@ -1678,6 +1703,7 @@
         const b = e.target.closest('button[data-tab]');
         if (!b) return;
         state.tab = b.dataset.tab;
+        state.toneFilter = null;
         state.focus = null;
         state.open.clear();
         render();
@@ -1736,8 +1762,22 @@
         refreshDrill();
         return;
       }
+      const tfBtn = e.target.closest('#toneFilter button');
+      if (tfBtn) {
+        const t = tfBtn.dataset.tone;
+        state.toneFilter = state.toneFilter === t ? null : t;
+        state.open.clear();
+        state.focus = null;
+        if (state.toneFilter) state.level = 'account';
+        $$('#toneFilter button').forEach(b => b.classList.toggle('is-active', b.dataset.tone === state.toneFilter));
+        $$('#levelSeg button').forEach(b => b.classList.toggle('is-active', !state.toneFilter && b.dataset.level === state.level));
+        const body = document.getElementById('drillBody');
+        if (body) { body.innerHTML = drillBody(CUR_DAY, CUR_WIN); mountCharts(); } else render();
+        return;
+      }
       const lvBtn = e.target.closest('#levelSeg button');
       if (lvBtn) {
+        state.toneFilter = null;
         state.level = lvBtn.dataset.level;
         state.open.clear();
         state.focus = null;
