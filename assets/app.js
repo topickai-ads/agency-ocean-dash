@@ -1191,7 +1191,7 @@
             ${[['bad', '只看红'], ['warn', '只看黄'], ['ok', '只看绿']].map(([t, n]) => `<button data-tone="${t}" class="${state.toneFilter === t ? 'is-active' : ''}"><i class="tdot ${t}"></i>${n}</button>`).join('')}
           </div>
           <div class="seg lamps" id="levelSeg">
-            ${LEVELS.map(l => `<button data-level="${l}" class="${!state.toneFilter && state.level === l ? 'is-active' : ''}">${lamp(tones.get(l))}${LV_NAME[l]}<em>${fmt.pct(tones.get(l), 0)}</em></button>`).join('')}
+            ${LEVELS.map(l => `<button data-level="${l}" class="${!state.toneFilter && state.level === l ? 'is-active' : ''}">${LV_NAME[l]}</button>`).join('')}
           </div>
         </div>
       </div>
@@ -1580,7 +1580,7 @@
                 ${[['bad', '只看红'], ['warn', '只看黄'], ['ok', '只看绿']].map(([t, n]) => `<button data-tone="${t}" class="${state.toneFilter === t ? 'is-active' : ''}"><i class="tdot ${t}"></i>${n}</button>`).join('')}
               </div>
               <div class="seg lamps" id="levelSeg">
-                ${LEVELS.map(l => `<button data-level="${l}" class="${!state.toneFilter && state.level === l ? 'is-active' : ''}" title="红灯行占该层花费">${shareLamp(tones.get(l))}${LV_NAME[l]}<em>${fmt.pct(tones.get(l), 0)}</em></button>`).join('')}
+                ${LEVELS.map(l => `<button data-level="${l}" class="${!state.toneFilter && state.level === l ? 'is-active' : ''}">${LV_NAME[l]}</button>`).join('')}
               </div>
             </div>
           </div>
