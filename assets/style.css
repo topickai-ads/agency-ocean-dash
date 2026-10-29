@@ -1226,6 +1226,4 @@ table.d.drill-t td.tree-cell { min-width: var(--name-col-w, 240px); box-sizing: 
 table.d.drill-t td.tree-cell { max-width: none; overflow: visible; padding-right: 10px; }
 table.d.drill-t th:nth-child(2), table.d.drill-t td:nth-child(2) { text-align: left; padding-left: 4px; }
 /* 四层 Meta 开/关小标签（最近一次拉取，级联） */
-table.d td.tree-cell .st-tag { display: inline-block; min-width: 24px; margin-left: 8px; padding: 1px 5px; box-sizing: border-box; font-style: normal; font-size: 12px; line-height: 18px; text-align: center; border-radius: 5px; vertical-align: middle; font-weight: 700; }
-table.d td.tree-cell .st-tag.on { background: #d4f2e1; border: 1px solid #8fd3ad; color: #1f8a4c; }
-table.d td.tree-cell .st-tag.off { background: #eceef2; border: 1px solid #c9ced6; color: #8a93a0; }
+table.d td.tree-cell .txt.is-off, table.d td.tree-cell .txt.is-off b { color: #8a93a0; text-decoration: line-through; }

@@ -1296,7 +1296,7 @@
     };
     const stBadge = (o, l) => {
       const s = onOf(o, l);
-      return s ? `<i class="st-tag ${s.on ? 'on' : 'off'}" title="${esc(s.tip)}">${s.on ? '开' : '关'}</i>` : '';
+      return '';
     };
 
     const rowHTML = (o, rowLv, label, extra, hasChild, key, depth) => {
@@ -1309,7 +1309,7 @@
       return `<tr class="lv-${rowLv} d${depth} ${isFocus ? 'is-focus' : ''}" data-lv="${rowLv}" data-key="${encodeURIComponent(key)}" data-node="${encodeURIComponent(o.key)}" data-name="${esc(label)}" data-extra="${esc(extra || '')}">
         <td class="tree-cell" style="padding-left:${10 + Math.min(depth, 3) * 12}px">
           ${lamp(o.d0)}${caret}
-          <span class="txt" title="${esc(label)}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>${stBadge(o, rowLv)}
+          <span class="txt${(onOf(o, rowLv) || {}).on === false ? ' is-off' : ''}" title="${esc(label)}${(() => { const s = onOf(o, rowLv); return s ? ' · ' + esc(s.tip) : ''; })()}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>${stBadge(o, rowLv)}
         </td>
         <td>${ratePill(o.d0)}${o.est ? '<i class="est" title="这天没有这一条的回收归属，按花费分摊">估</i>' : ''}</td>
         <td>${fmt.money(o.spend)}</td>
@@ -1336,7 +1336,7 @@
       let m = 0;
       for (const o of list) {
         const strong = l === 'account' || l === 'campaign';
-        const w = 10 + Math.min(depth, 3) * 12 + 8 + 8 + 15 + 3 + textW(nameOf(o, l), strong) + 10 + 6 + (onOf(o, l) ? 36 : 0);
+        const w = 10 + Math.min(depth, 3) * 12 + 8 + 8 + 15 + 3 + textW(nameOf(o, l), strong) + 10 + 6;
         if (w > m) m = w;
         const kids = kidsOfRow(o, l);
         if (kids.length) m = Math.max(m, measureAll(TREE[l], kids, depth + 1));
