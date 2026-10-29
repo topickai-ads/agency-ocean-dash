@@ -1337,7 +1337,7 @@
 
     return `${okAdsPanel(day)}<div class="table-wrap"><table class="d drill-t">
       <colgroup>
-        <col class="c-name"><col class="c-spend"><col class="c-d0"><col class="c-rate">
+        <col class="c-name"><col class="c-rate"><col class="c-spend"><col class="c-d0">
         <col class="c-payers"><col class="c-cpa"><col class="c-spark">
       </colgroup>
       <thead>

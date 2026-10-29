@@ -1218,3 +1218,10 @@ body.is-pulling .top, body.is-pulling main, body.is-pulling .foot {
   pointer-events: none; user-select: none;
 }
 table.d td.tree-cell > .txt { font-size: 14px; } /* 四层名字放大 */
+/* D0 率贴名字：名字列宽 = 本表最长名，D0 率左对齐于名字列右缘；剩余宽度给末列 */
+table.d.drill-t { table-layout: auto; }
+table.d.drill-t col.c-name { width: 1%; }
+table.d.drill-t col.c-spark { width: auto; }
+table.d.drill-t td.tree-cell { max-width: none; overflow: visible; padding-right: 10px; }
+table.d.drill-t th:nth-child(2), table.d.drill-t td:nth-child(2) { text-align: left; padding-left: 4px; }
+table.d.drill-t .spark-cell { width: 100%; text-align: left; }
