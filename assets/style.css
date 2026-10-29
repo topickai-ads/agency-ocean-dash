@@ -991,50 +991,8 @@ tr.lv-adset .txt b, tr.lv-ad .txt b { color: var(--ink-2); font-weight: 600; }
 /* 预算表底部说明贴底，别在中间留一块空白 */
 .bs .bs-note { margin-top: auto; }
 
-/* ---------------- 下钻：D0 达标 AD ---------------- */
 
-.okads {
-  margin: 0 14px 12px;
-  border: 1px solid #d7ead9;
-  background: #f7fcf8;
-  border-radius: 10px;
-  overflow: hidden;
-  max-width: calc(100% - 28px);
-  min-width: 0;
-}
-.okads.empty-ok {
-  border-color: var(--line); background: #fafbfd;
-  padding: 9px 12px; font-size: 11.5px; color: var(--ink-3);
-}
-.okads-head {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px 7px;
-  font-size: 11.5px; color: var(--ink-2);
-  border-bottom: 1px solid #e4f1e6;
-}
-.okads-head b { font-weight: 650; font-variant-numeric: tabular-nums; }
-.oktag {
-  font-size: 9.5px; font-weight: 700; letter-spacing: .03em;
-  color: #0f7a4a; background: #dcf2e4;
-  border-radius: 4px; padding: 1.5px 6px;
-}
-table.d.okads-t { background: transparent; }
-table.d.okads-t th { background: transparent; border-bottom: 1px solid #e4f1e6; }
-table.d.okads-t td { border-bottom: 1px solid #eef7f0; }
-table.d.okads-t tr:last-child td { border-bottom: 0; }
-.ok-sub {
-  font-size: 10px; color: var(--ink-4);
-  margin-left: 0; padding-left: 0;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 420px;
-}
-.okmore {
-  display: block; width: 100%;
-  border: 0; border-top: 1px solid #e4f1e6; background: transparent;
-  padding: 6px; cursor: pointer;
-  font-size: 11px; color: #0f7a4a; font-weight: 550;
-}
-.okmore:hover { background: #eef9f1; }
+
 
 /* 估算标记：这条回收是按花费分摊的，不是真实归属 */
 i.est {
@@ -1062,16 +1020,6 @@ table.d.drill-t td.tree-cell > .txt {
 }
 table.d.drill-t .spark-cell { padding-left: 8px; padding-right: 10px; }
 
-table.d.okads-t { table-layout: fixed; width: 100%; min-width: 560px; }
-table.d.okads-t td:first-child {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  max-width: 0;
-}
-.okads-head {
-  flex-wrap: wrap;
-  row-gap: 4px;
-}
-.ok-sub { max-width: 100%; }
 
 /* 窄屏：缩小数字列/内边距，封顶树缩进观感；表在 .table-wrap 内横滑，外层不撑页 */
 @media (max-width: 860px) {
@@ -1091,11 +1039,8 @@ table.d.okads-t td:first-child {
   table.d.drill-t col.c-spark { width: 70px; }
   table.d.drill-t .spark-cell { padding-left: 4px; padding-right: 6px; }
 
-  table.d.okads-t { min-width: 520px; }
   table.q th, table.q td { padding: 7px 8px; }
 
-  .okads { margin: 0 10px 10px; max-width: calc(100% - 20px); }
-  .ok-sub { max-width: 220px; }
 
   .sec h2 { white-space: normal; }
   .drill-head { gap: 8px; }
@@ -1235,10 +1180,11 @@ table.d td.tree-cell .txt.is-off, table.d td.tree-cell .txt.is-off b { color: #8
 #toneFilter .tdot.warn { background: #eab308; }
 #toneFilter .tdot.ok { background: #12b76a; }
 
-/* D0 达标 AD：四层路径展全，不裁切 */
-.ok-sub.ok-path, .ok-sub {
-  white-space: normal; overflow: visible; text-overflow: clip;
-  max-width: none; word-break: break-all; line-height: 1.45; margin-top: 2px;
-}
-.ok-path em { font-style: normal; color: var(--ink-4); opacity: .7; margin: 0 4px; }
+
 @media (max-width: 860px) { .ok-sub { max-width: none; } }
+
+/* 四层明细：表格上方控件行，左对齐，搜索在最右 */
+.drill-ctrl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px 10px; }
+.drill-ctrl .search { margin-left: auto; min-width: 200px; }
+.drill-ctrl .search input { width: 100%; }
+@media (max-width: 640px) { .drill-ctrl .search { margin-left: 0; flex: 1 1 100%; } }
