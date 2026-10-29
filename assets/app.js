@@ -47,6 +47,7 @@
     tab: 'overview',      // overview(预算及消耗下钻) | recovery(回收及明细)
     drillDay: null,
     spendMin: null,       // null=全部 | 50 | 100 | 200：只滤当前层级 spend > 阈值，与颜色 AND
+    offFilter: 'include', // 'include'=含暂停（默认，现网）| 'exclude'=不含暂停：滤当前层 effective 关的行
     toneFilter: null      // null=全部 | 'bad' | 'warn' | 'ok'：与 level 复合，只滤当前层级
   };
 
@@ -1169,8 +1170,27 @@
     /* 层级 = 展开目标深度；颜色只滤目标层。树永远从 account 画起，祖先仅在有可见目标层子孙时显示 */
     const tgtIdx = LEVELS.indexOf(lv);
     let tgt = kidsOf(lv);
+    const STM = (D && D.meta && D.meta.status) || null;
+    const onOf = (o, l) => {
+      if (!STM) return null;
+      const m = STM[o.acc];
+      if (!m) return null;
+      const chain = [['账户', m.a == null ? null : (m.a === 1 ? 'ACTIVE' : 'account_status=' + m.a)]];
+      if (l !== 'account') chain.push(['系列', (m.c || {})[o.camp || '']]);
+      if (l === 'adset' || l === 'ad') chain.push(['组', (m.s || {})[(o.camp || '') + SEP + (o.ads || '')]]);
+      if (l === 'ad') chain.push(['广告', (m.d || {})[(o.camp || '') + SEP + (o.ads || '') + SEP + (o.ad || '')]]);
+      const own = chain[chain.length - 1][1];
+      for (let i = 1; i < chain.length - 1; i++) { /* 账户层不级联：代理户 account_status 常为 2 不可靠 */
+        const r = chain[i][1];
+        if (r != null && r !== 'ACTIVE') return { on: false, tip: `关 · 上级${chain[i][0]}：${r}` + (own ? ` · 本层：${own}` : '') };
+      }
+      if (own == null) return null;
+      if (l === 'account') return { on: own === 'ACTIVE', tip: (own === 'ACTIVE' ? '开' : '关') + ` · 账户 raw account_status=${m.a}（不级联子层）` + (m.t ? ` · 拉取于 ${m.t}` : '') };
+      return { on: own === 'ACTIVE', tip: (own === 'ACTIVE' ? '开' : '关') + ` · ${own}` + (m.t ? ` · 拉取于 ${m.t}` : '') };
+    };
     if (TF) tgt = tgt.filter(o => o.d0 != null && tone(o.d0) === TF);
     if (state.spendMin) tgt = tgt.filter(o => (o.spend || 0) > state.spendMin);
+    if (state.offFilter === 'exclude') tgt = tgt.filter(o => (onOf(o, lv) || {}).on !== false);
     if (!tgt.length) return null;
     const keep = {}; LEVELS.forEach(l => { keep[l] = new Set(); });
     tgt.forEach(o => keep[lv].add(o.key));
@@ -1210,25 +1230,7 @@
     };
 
     /* Meta 开/关：最近一次 pull 的 effective_status（meta.status），级联——上级关则下级显示关；无数据=不显示 */
-    const STM = (D && D.meta && D.meta.status) || null;
     const SEP = '\x01';
-    const onOf = (o, l) => {
-      if (!STM) return null;
-      const m = STM[o.acc];
-      if (!m) return null;
-      const chain = [['账户', m.a == null ? null : (m.a === 1 ? 'ACTIVE' : 'account_status=' + m.a)]];
-      if (l !== 'account') chain.push(['系列', (m.c || {})[o.camp || '']]);
-      if (l === 'adset' || l === 'ad') chain.push(['组', (m.s || {})[(o.camp || '') + SEP + (o.ads || '')]]);
-      if (l === 'ad') chain.push(['广告', (m.d || {})[(o.camp || '') + SEP + (o.ads || '') + SEP + (o.ad || '')]]);
-      const own = chain[chain.length - 1][1];
-      for (let i = 1; i < chain.length - 1; i++) { /* 账户层不级联：代理户 account_status 常为 2 不可靠 */
-        const r = chain[i][1];
-        if (r != null && r !== 'ACTIVE') return { on: false, tip: `关 · 上级${chain[i][0]}：${r}` + (own ? ` · 本层：${own}` : '') };
-      }
-      if (own == null) return null;
-      if (l === 'account') return { on: own === 'ACTIVE', tip: (own === 'ACTIVE' ? '开' : '关') + ` · 账户 raw account_status=${m.a}（不级联子层）` + (m.t ? ` · 拉取于 ${m.t}` : '') };
-      return { on: own === 'ACTIVE', tip: (own === 'ACTIVE' ? '开' : '关') + ` · ${own}` + (m.t ? ` · 拉取于 ${m.t}` : '') };
-    };
     const stBadge = (o, l) => {
       const s = onOf(o, l);
       return '';
@@ -1316,7 +1318,7 @@
 
   function drillBody(day, win) {
     const c = drillCalc(day, win);
-    if (!c) return `<div class="empty">${fmt.md(day)} 这一天没有${state.spendMin ? '花费>$' + state.spendMin + '的' : ''}${state.toneFilter ? TF_NAME[state.toneFilter] + '灯的' : '在投的'}${LV_NAME[state.level]}${state.q ? '（已叠加搜索）' : ''}</div>`;
+    if (!c) return `<div class="empty">${fmt.md(day)} 这一天没有${state.spendMin ? '花费>$' + state.spendMin + '的' : ''}${state.offFilter === 'exclude' ? '未暂停的' : ''}${state.toneFilter ? TF_NAME[state.toneFilter] + '灯的' : '在投的'}${LV_NAME[state.level]}${state.q ? '（已叠加搜索）' : ''}</div>`;
 
     return `<div class="table-wrap"><table class="d drill-t" style="--name-col-w:${c.nameW}px">
       <colgroup>
@@ -1492,6 +1494,9 @@
             <div class="seg tonef" id="spendFilter">
               ${[[null, '全部'], [50, '>$50'], [100, '>$100'], [200, '>$200']].map(([v, n]) => `<button data-spend="${v || ''}" class="${state.spendMin === v ? 'is-active' : ''}">${n}</button>`).join('')}
             </div>
+            <div class="seg tonef" id="offFilter">
+              ${[['include', '含暂停'], ['exclude', '不含暂停']].map(([v, n]) => `<button data-off="${v}" class="${state.offFilter === v ? 'is-active' : ''}">${n}</button>`).join('')}
+            </div>
             <div class="search">
               <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="m16.5 16.5 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
               <input id="drillQ" type="search" placeholder="搜账号 / campaign / adset / ad" value="${esc(state.q)}">
@@ -1573,7 +1578,7 @@
       state.open.clear();
       state._autoOpen = true;
       state.focus = null;
-      state.toneFilter = null; state.spendMin = null;
+      state.toneFilter = null; state.spendMin = null; state.offFilter = 'include';
       syncControls();
       render();
     }));
@@ -1583,7 +1588,7 @@
       state.open.clear();
       state._autoOpen = true;
       state.focus = null;
-      state.toneFilter = null; state.spendMin = null;
+      state.toneFilter = null; state.spendMin = null; state.offFilter = 'include';
       syncControls();
       render();
     }));
@@ -1607,7 +1612,7 @@
         state.open.clear();
         state._autoOpen = true;
         state.focus = null;
-        state.toneFilter = null; state.spendMin = null;
+        state.toneFilter = null; state.spendMin = null; state.offFilter = 'include';
         syncControls();
         render();
       });
@@ -1622,7 +1627,7 @@
         const b = e.target.closest('button[data-tab]');
         if (!b) return;
         state.tab = b.dataset.tab;
-        state.toneFilter = null; state.spendMin = null;
+        state.toneFilter = null; state.spendMin = null; state.offFilter = 'include';
         state.focus = null;
         state.open.clear();
         state._autoOpen = true;
@@ -1683,6 +1688,16 @@
         state.focus = null;
         state._autoOpen = true;
         $$('#spendFilter button').forEach(b => b.classList.toggle('is-active', (b.dataset.spend ? +b.dataset.spend : null) === state.spendMin));
+        const body = document.getElementById('drillBody');
+        if (body) { body.innerHTML = drillBody(CUR_DAY, CUR_WIN); mountCharts(); } else render();
+        return;
+      }
+      const offBtn = e.target.closest('#offFilter button');
+      if (offBtn) {
+        state.offFilter = offBtn.dataset.off || 'include';
+        state.focus = null;
+        state._autoOpen = true;
+        $$('#offFilter button').forEach(b => b.classList.toggle('is-active', b.dataset.off === state.offFilter));
         const body = document.getElementById('drillBody');
         if (body) { body.innerHTML = drillBody(CUR_DAY, CUR_WIN); mountCharts(); } else render();
         return;
