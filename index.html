@@ -135,10 +135,10 @@ function loadAk(){try{const raw=localStorage.getItem(AK);if(!raw)return null;con
 function loadHook(){
  try{
   const m=window.DASHBOARD_DATA&&window.DASHBOARD_DATA.meta||{};
-  if(m.refresh_webhook) return {kind:"webhook",url:String(m.refresh_webhook).trim()};
+  if(m.refresh_webhook) return {kind:"webhook",url:String(m.refresh_webhook).trim(),key:String(m.refresh_webhook_key||"").trim()};
   if(m.refresh_ntfy) return {kind:"ntfy",topic:String(m.refresh_ntfy).trim()};
   const ls=(localStorage.getItem(HOOK)||"").trim();
-  if(ls) return {kind:"webhook",url:ls};
+  if(ls) return {kind:"webhook",url:ls,key:""};
   return null;
  }catch(e){return null;}
 }
@@ -162,7 +162,7 @@ function bootApp(){
  if(old) old.remove();
  const sc=document.createElement("script");
  sc.id="appBoot";
- sc.src="assets/app.js?v=388098a087";
+ sc.src="assets/app.js?v=c20bb24a07";
  document.body.appendChild(sc);
 }
 function showGateMode(mode, msg){
@@ -222,20 +222,24 @@ async function wirePull(){
  btn.addEventListener("click",async()=>{
   if(btn.disabled||document.body.classList.contains("is-pulling")) return;
   setPullLabel("拉取中…",true);
-  showPullOverlay(true, "正在拉取最新数据", "已发信号；后台约每 5 分钟扫一次，扫到后会拉数并自动刷新");
   const hook=loadHook();
+  const isWh=!!(hook&&hook.kind==="webhook"&&hook.url);
+  showPullOverlay(true, "正在拉取最新数据", isWh?"已立刻触发后台拉数，通常 1–2 分钟完成":"已发信号；后台约每 5 分钟扫一次，扫到后会拉数并自动刷新");
   let hooked=false;
   if(hook&&hook.kind==="ntfy"&&hook.topic){
    try{
     await fetch("https://ntfy.sh/"+encodeURIComponent(hook.topic),{method:"POST",headers:{"Content-Type":"text/plain"},body:"agency-dash-refresh "+new Date().toISOString()});
     hooked=true;
    }catch(e){console.warn(e);}
-  } else if(hook&&hook.kind==="webhook"&&hook.url){
+  } else if(isWh){
+   const hdr={"Content-Type":"text/plain"};
+   if(hook.key) hdr["Authorization"]="Bearer "+hook.key;
    try{
-    await fetch(hook.url,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},body:"agency-dash-refresh "+new Date().toISOString()});
-    hooked=true;
+    const r=await fetch(hook.url,{method:"POST",mode:"cors",headers:hdr,body:"agency-dash-refresh "+new Date().toISOString()});
+    if(r.ok||r.status===202||r.status===204) hooked=true;
+    else console.warn("webhook HTTP",r.status);
    }catch(e1){
-    try{await fetch(hook.url,{method:"POST",mode:"no-cors",body:"agency-dash-refresh"});hooked=true;}catch(e2){console.warn(e2);}
+    try{await fetch(hook.url,{method:"POST",mode:"no-cors",headers:hdr,body:"agency-dash-refresh"});hooked=true;}catch(e2){console.warn(e2);}
    }
   }
   if(!hooked){
@@ -245,11 +249,11 @@ async function wirePull(){
    return;
   }
   setPullLabel("后台刷新中…",true);
-  showPullOverlay(true, "正在拉取最新数据", "信号已发出，等待后台扫到并完成拉数…");
+  showPullOverlay(true, "正在拉取最新数据", isWh?"后台已开始拉数，完成后会自动刷新…":"信号已发出，等待后台扫到并完成拉数…");
   const pw=loadAk();
   const prevAt=(window.DASHBOARD_DATA&&window.DASHBOARD_DATA.meta&&window.DASHBOARD_DATA.meta.generated_at)||"";
   const started=Date.now();
-  // 后台靠 ntfy 轮询，最快约每 5 分钟扫一次；整轮拉数+推送约 0.5–1.5 分钟。等满约 6 分钟才超时。
+  // webhook 一点即拉；ntfy 轮询最慢约 5 分钟。整轮约 0.5–2 分钟，等满约 6 分钟才超时。
   const maxMs=6*60*1000;
   await new Promise(r=>setTimeout(r,3000));
   while(Date.now()-started<maxMs){
