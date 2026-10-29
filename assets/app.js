@@ -1485,10 +1485,10 @@
   /* ---------------- 下钻 tab ---------------- */
 
   function renderDrill(slot) {
-    /* 下钻按自然日，含今天（今天有实时 D0） */
-    const days = DATES.slice(-Math.min(DATES.length, IS_AG ? 7 : 7));
-    if (!state.drillDay || !days.includes(state.drillDay)) state.drillDay = days[days.length - 1];
-    const day = state.drillDay;
+    /* 与顶部日期筛选共用焦点日 + 7 天窗口（不再单独 daySeg） */
+    const days = windowDates();
+    const day = focusDate();
+    state.drillDay = day;
     const tones = levelTone(day);
     CUR_DAY = day;
     CUR_WIN = days;
@@ -1496,14 +1496,11 @@
     (slot || main).innerHTML = `
       <section class="sect">
         ${sec('02', '四层明细',
-          `账号 → Campaign → Adset → Ad，只列当天在投的 · 行首灯 = 当天 D0（≥${fmt.pct(LIGHT.ok, 0)} 绿 · ${fmt.pct(LIGHT.warn, 0)}–${fmt.pct(LIGHT.ok, 0)} 黄 · &lt;${fmt.pct(LIGHT.warn, 0)} 红）· 层级按钮上的数字 = 红灯行占该层花费`,
+          `账号 → Campaign → Adset → Ad，只列当天在投的 · 日期跟顶部筛选 · 行首灯 = 当天 D0（≥${fmt.pct(LIGHT.ok, 0)} 绿 · ${fmt.pct(LIGHT.warn, 0)}–${fmt.pct(LIGHT.ok, 0)} 黄 · &lt;${fmt.pct(LIGHT.warn, 0)} 红）· 层级按钮上的数字 = 红灯行占该层花费`,
           `${fmt.md(day)}${day === TODAY ? ' 盘中' : ''} · 花费 ${fmt.money((() => { let v = 0; for (const r of ALL) if (r.lv === 'campaign' && r.d === day && match(r, {})) v += r.spend; return v; })())}`)}
         <article class="card">
           <div class="drill-head">
-            <div class="seg" id="daySeg">
-              ${days.map(d => `<button data-day="${d}" class="${d === day ? 'is-active' : ''}">${fmt.md(d)}${d === TODAY ? '·盘中' : ''}</button>`).join('')}
-            </div>
-            <div class="head-right">
+            <div class="head-right" style="margin-left:auto">
               <div class="search">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="m16.5 16.5 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
                 <input id="drillQ" type="search" placeholder="搜账号 / campaign / adset / ad" value="${esc(state.q)}">
@@ -1539,7 +1536,6 @@
     if (state.product !== 'all') q.set('product', state.product);
     q.set('v', state.view);
     if (state.level !== 'account') q.set('level', state.level);
-    if (state.tab === 'overview' && state.drillDay) q.set('day', state.drillDay);
     const h = q.toString();
     history.replaceState(null, '', h ? '#' + h : location.pathname + location.search);
   }
@@ -1556,7 +1552,10 @@
     if (LEVELS.includes(l)) state.level = l;
     if (q.get('tab') === 'recovery') state.tab = 'recovery';
     const dd = q.get('day');
-    if (dd && /^\d{4}-\d{2}-\d{2}$/.test(dd)) state.drillDay = dd;
+    if (dd && /^\d{4}-\d{2}-\d{2}$/.test(dd)) {
+      state.view = 'd:' + dd;   // 旧链接 day= 并入顶部日期筛选
+      state.drillDay = dd;
+    }
   }
 
   function syncControls() {
@@ -1686,15 +1685,6 @@
         const k = decodeURIComponent(caret.dataset.k);
         if (state.open.has(k)) state.open.delete(k); else state.open.add(k);
         refreshDrill();
-        return;
-      }
-      const dayBtn = e.target.closest('#daySeg button');
-      if (dayBtn) {
-        state.drillDay = dayBtn.dataset.day;
-        state.okAll = false;
-        state.open.clear();
-        state.focus = null;
-        render();
         return;
       }
       const lvBtn = e.target.closest('#levelSeg button');
