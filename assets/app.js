@@ -1179,7 +1179,6 @@
     if (state._autoOpen) {
       state._autoOpen = false;
       state.open.clear();
-      state._autoOpen = true;
       for (let i = 0; i < tgtIdx; i++) keep[LEVELS[i]].forEach(k => state.open.add(LEVELS[i] + '|' + k));
     }
     const top = kidsOf('account').filter(o => keep.account.has(o.key));
