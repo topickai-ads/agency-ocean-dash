@@ -900,9 +900,17 @@
     ].join('');
   }
 
-  /* ---------------- 02 逐日明细 D0/D1/D3/D7 ---------------- */
+  /* ---------------- 02 逐日明细 D0/D1/D3/D7/D14 ---------------- */
+  /* 逐日明细单独放宽到焦点日往前 21 个完整日（数据里有多少给多少），否则 D14 永远「还 N 天」；代理版数据层只有 7 天，自然只显示 7 天 */
+  function detailDates() {
+    const f = focusDate();
+    const i = f === TODAY ? COMPLETE.length - 1 : COMPLETE.indexOf(f);
+    if (i < 0) return windowDates();
+    const start = scopeStart();
+    return COMPLETE.slice(Math.max(0, i - 20), i + 1).filter(d => d >= start);
+  }
 
-  const OFFS_SHOW = [0, 1, 3, 7];
+  const OFFS_SHOW = [0, 1, 3, 7, 14];
 
   function detailCard(dates) {
     const rows = dailyMap('campaign', dates);
@@ -916,7 +924,7 @@
 
     const cumTo = (a, k) => a.n.slice(0, k + 1).reduce((x, y) => x + y, 0);
 
-    /* D0 / D1 / D3 / D7 全部给回收率（这批人到那天为止回了多少 ÷ 当天花费），不给金额 */
+    /* D0 / D1 / D3 / D7 / D14 全部给回收率（这批人到那天为止回了多少 ÷ 当天花费），不给金额 */
     const rateAt = (a, k, d) => {
       if (!a.spendA) return '<span class="dim">—</span>';
       if (k > 0 && addDays(d, k) > REV_UNTIL) {
@@ -961,8 +969,8 @@
     };
     const totCum = tot.n.reduce((a, b) => a + b, 0);
 
-    const notes = ['D1 / D3 / D7 是这批人到那天为止的累计回收率（÷ 当天花费），不是当天增量。'];
-    const short = [1, 3, 7].filter(k => reached(k).length < list.length);
+    const notes = ['D1 / D3 / D7 / D14 是这批人到那天为止的累计回收率（÷ 当天花费），不是当天增量。'];
+    const short = [1, 3, 7, 14].filter(k => reached(k).length < list.length);
     if (short.length) {
       notes.push(short.map(k => {
         const ds = reached(k);
@@ -977,7 +985,7 @@
 
     return `<article class="card">
       <div class="card-head detail-head" id="detailToggle">
-        <h2>逐日明细</h2><span class="sub">D0 / D1 / D3 / D7 回收比例 · ${list.length} 个完整日</span>
+        <h2>逐日明细</h2><span class="sub">D0 / D1 / D3 / D7 / D14 回收比例 · ${list.length} 个完整日</span>
         <span class="toggle ${state.detail ? 'open' : ''}">${state.detail ? '收起' : '展开'}
           <svg viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </span>
@@ -987,12 +995,12 @@
           <tr class="grp">
             <th></th><th></th><th></th><th></th>
             <th>当天</th>
-            <th colspan="3">同一批人往后（累计）</th>
+            <th colspan="4">同一批人往后（累计）</th>
             <th>到现在</th>
           </tr>
           <tr>
             <th>安装日</th><th>花费</th><th>付费人</th><th>成本/人</th>
-            <th>D0</th><th>D1</th><th>D3</th><th>D7</th>
+            <th>D0</th><th>D1</th><th>D3</th><th>D7</th><th>D14</th>
             <th>累计</th>
           </tr>
         </thead>
@@ -1006,6 +1014,7 @@
           <td>${footRate(1)}</td>
           <td>${footRate(3)}</td>
           <td>${footRate(7)}</td>
+          <td>${footRate(14)}</td>
           <td>${okSp(tot.spend) ? fmt.pct((totCum / (tot.spend * FEE)), 0) : '—'}</td>
         </tr></tfoot>
       </table></div>${gapNote}` : ''}
@@ -1441,7 +1450,7 @@
         ${sec('01', '回收情况', `当日快照 + 逐日走势 · 只算 ${AG} 自己的量 · D0 基准 ${fmt.pct(BENCH, 0)}`, '')}
         ${snapStrip(daily, focusIdx)}
         <div class="row-mini">${recoveryCards(wd, focusIdx)}</div>
-        ${detailCard(wd)}
+        ${detailCard(detailDates())}
       </section>
 
 `;
@@ -1655,8 +1664,8 @@
     $('#who').classList.toggle('is-ag', IS_AG);
 
     $('#brandSub').textContent = IS_AG
-      ? `安装日口径 · 净回收 D0–D7 · 窗口固定 ${WINDOW_DAYS} 天`
-      : `${PRODUCTS.map(p => p.short).join(' + ')} · 含自投 zt · 安装日口径 · 净回收 D0–D7 · 窗口固定 ${WINDOW_DAYS} 天`;
+      ? `安装日口径 · 净回收 D0–D14 · 窗口固定 ${WINDOW_DAYS} 天`
+      : `${PRODUCTS.map(p => p.short).join(' + ')} · 含自投 zt · 安装日口径 · 净回收 D0–D14 · 窗口固定 ${WINDOW_DAYS} 天`;
     $('#benchHint').textContent = `D0 净回收率 ${fmt.pct(BENCH, 0)} = 基准`;
 
     let rz;
@@ -1836,7 +1845,7 @@
       <h3>核心口径</h3>
       <ul>
         <li><b>D0 净回收率</b> = 安装当天净回收 / 当天花费。<b>50% 为正常参考值</b>，任何国家同一标准。</li>
-        <li><b>D1 / D3 / D7</b> = 同一批新增在往后第 1/3/7 天的净回收额。</li>
+        <li><b>D1 / D3 / D7 / D14</b> = 同一批新增在往后第 1/3/7/14 天的净回收额。</li>
         <li><b>Cohort 累计回收</b> = 那一天的新增，从 D0 到报表日的累计净回收 ÷ 那天的花费。各批观察期不同，越新越低是正常的。</li>
         <li><b>净回收</b> = Google Play ×0.70 + Stripe ×0.70（均按 30% 抽成），剔除内部/测试账号。；回收率分母 = Meta spend ×1.05（含代理服务费 5%）。</li>
         <li><b>单个新增付费用户成本</b> = 花费 / D0 付费人数。只看趋势，不设基线。</li>
