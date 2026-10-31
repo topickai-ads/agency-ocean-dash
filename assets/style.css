@@ -1205,3 +1205,7 @@ html, body { line-height: 1.55; }
 /* 预算表加 D1/D3/D7 后窄屏横向滚动 */
 .bs-table { overflow-x: auto; }
 .bs-table .bs-row { min-width: 620px; }
+
+/* Dk 观察日未走完：临时率，与定论色块区分 */
+.pill.prov { background: #f4f5f7; color: #8a93a0; border: 1px dashed #c3c9d2; font-style: italic; white-space: nowrap; }
+.pill.prov i { font-style: normal; font-size: 10px; margin-left: 4px; color: #98a2b3; }

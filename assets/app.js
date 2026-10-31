@@ -765,7 +765,7 @@
     return T.anyB
       ? `预算 = 当天真在跑的 campaign 预算之和${live
           ? '；今天还没跑完，消耗比例收盘前会一直偏低'
-          : '（按变更日志回溯）；campaign 级预算 Meta 只给当前值，历史日留空'}。D0 回收率 = 当天安装用户净回收 ÷ 当日花费×1.05；D1/D3/D7 为同一批安装用户累计到安装日+k 的净回收 ÷ 当日花费×1.05（累计率），未到观察日显示「还 N 天」。`
+          : '（按变更日志回溯）；campaign 级预算 Meta 只给当前值，历史日留空'}。D0 回收率 = 当天安装用户净回收 ÷ 当日花费×1.05；D1/D3/D7 为同一批安装用户累计到安装日+k 的净回收 ÷ 当日花费×1.05（累计率），未到观察日显示「还 N 天」；观察日当天未结束前显示灰色虚线「D1未完」临时率，非正式定论。`
       : `当日预算没记账${T.ledgerFrom ? `（台账从 ${fmt.md(T.ledgerFrom)} 起）` : ''}，只显示消耗与 D0/D1/D3/D7 回收率（累计率，未到观察日显示「还 N 天」）。`;
   }
 
@@ -1287,7 +1287,7 @@
         <td>${dkCell(dkOf(o.n, o.spend, day, 7))}</td>
         <td>${fmt.money(o.spend)}</td>
         <td><b>${fmt.money(o.n[0])}</b></td>
-        <td>${d1.due ? fmt.money(d1.net) : d1.pend}</td>
+        <td>${d1.due ? fmt.money(d1.net) : (d1.net != null ? `<span class="dim" title="D1 观察日今天还没结束">${fmt.money(d1.net)} 未完</span>` : d1.pend)}</td>
         <td class="dim">${fmt.num(o.p0)}</td>
         <td>${o.cpa ? fmt.money(o.cpa) : '<span class="dim">—</span>'}</td>
         <td class="spark-cell">${sparkSvg(net7, { kind: 'bar', w: 62, h: 18, color: o.n[0] >= o.spend * BENCH ? '#a7e3c3' : '#f5c4bd' })}</td>
@@ -1349,7 +1349,9 @@
     }
     const n = o.n || [];
     const net = (n[0] || 0) + (n[1] || 0);
-    return { due: true, net, rate: okSp(o.spend) ? net / (o.spend * FEE) : null };
+    const rate = okSp(o.spend) ? net / (o.spend * FEE) : null;
+    if (addDays(day, 1) >= TODAY) return { due: false, net, rate, pend: provPill(rate, 1) };
+    return { due: true, net, rate };
   }
 
   /* 通用 Dk 累计率：累计到安装日+k 的净回收 ÷ 花费×1.05；未到观察日显示「还 N 天」 */
@@ -1361,7 +1363,13 @@
     }
     let net = 0;
     for (let i = 0; i <= k; i++) net += (n && n[i]) || 0;
-    return { due: true, net, rate: okSp(spend) ? net / (spend * FEE) : null };
+    const rate = okSp(spend) ? net / (spend * FEE) : null;
+    if (k > 0 && addDays(day, k) >= TODAY) return { due: false, net, rate, pend: provPill(rate, k) };
+    return { due: true, net, rate };
+  }
+  /* 观察日（安装日+k）当天还没结束：临时累计率，灰底虚线 + 「未完」，不当定论 */
+  function provPill(rate, k) {
+    return `<span class="pill prov" title="D${k} 观察日（安装日+${k}）今天还没结束，这是临时累计率，不是定论">${rate == null ? '—' : fmt.pct(rate)}<i>D${k}未完</i></span>`;
   }
   const dkCell = (x, digits) => x.due ? ratePill(x.rate, digits) : x.pend;
 
@@ -1376,7 +1384,7 @@
         <td>${dkCell(dkOf(c.total.n, c.total.spend, c.day, 7))}</td>
         <td>${fmt.money(c.total.spend)}</td>
         <td>${fmt.money(c.total.n0)}</td>
-        <td>${f1.due ? fmt.money(f1.net) : f1.pend}</td>
+        <td>${f1.due ? fmt.money(f1.net) : (f1.net != null ? `<span class="dim" title="D1 观察日今天还没结束">${fmt.money(f1.net)} 未完</span>` : f1.pend)}</td>
         <td>${fmt.num(c.total.p0)}</td>
         <td>${c.total.p0 ? fmt.money(c.total.spend / c.total.p0) : '—'}</td>
         <td></td>
@@ -1907,7 +1915,7 @@
         <li><b>Cohort 累计回收</b> = 那一天的新增，从 D0 到报表日的累计净回收 ÷ 那天的花费。各批观察期不同，越新越低是正常的。</li>
         <li><b>净回收</b> = Google Play ×0.70 + Stripe ×0.70（均按 30% 抽成），剔除内部/测试账号。；回收率分母 = Meta spend ×1.05（含代理服务费 5%）。</li>
         <li><b>单个新增付费用户成本</b> = 花费 / D0 付费人数。只看趋势，不设基线。</li>
-        <li><b>四层明细 / 预算表 D0·D1·D3·D7 率</b> = 同一批安装用户累计到安装日+k（北京自然日，非滚动 24h）的净回收 ÷ 当天花费×1.05（累计率）；未到安装日+k 显示「还 N 天」。灯与红黄绿筛选仍只看 D0。</li>
+        <li><b>四层明细 / 预算表 D0·D1·D3·D7 率</b> = 同一批安装用户累计到安装日+k（北京自然日，非滚动 24h）的净回收 ÷ 当天花费×1.05（累计率）；未到安装日+k 显示「还 N 天」；安装日+k 当天未结束前显示灰色虚线「Dk未完」临时率（非正式定论）。灯与红黄绿筛选仍只看 D0。</li>
         <li><b>灯</b>：D0 ≥ ${fmt.pct(LIGHT.ok, 0)} 绿、${fmt.pct(LIGHT.warn, 0)}–${fmt.pct(LIGHT.ok, 0)} 黄、&lt; ${fmt.pct(LIGHT.warn, 0)} 红；样本太小的产品不打灯。</li>
         <li><b>消耗只看趋势</b>：每日花费是 Meta 实时拉的账单数，不再拿它跟固定预算比；预算只在预算卡里按账户看完成度。</li>
       </ul>
