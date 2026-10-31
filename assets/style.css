@@ -1213,3 +1213,5 @@ html, body { line-height: 1.55; }
 .prov-tag { font-style: normal; font-size: 10px; font-weight: 600; color: #64748b; margin-left: 4px; padding: 0 4px; border: 1px dashed #9aa4b2; border-radius: 4px; }
 .bs-row .num.prov-col { align-self: stretch; display: flex; align-items: center; justify-content: flex-end; padding-right: 4px; }
 .bs-row.bs-total .num.prov-col { border-bottom: 1.5px dashed #9aa4b2 !important; }
+.bs-row:not(.bs-head) > .num.prov-col { margin: -7px 0; padding-top: 7px; padding-bottom: 7px; }
+.bs-row.bs-head > .num.prov-col { margin: -2px 0 -5px; padding-top: 2px; padding-bottom: 5px; }
