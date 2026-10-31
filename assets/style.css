@@ -1207,11 +1207,11 @@ html, body { line-height: 1.55; }
 .bs-table .bs-row { min-width: 620px; }
 
 /* Dk 观察日当天未结束：整列虚线框 + 表头「未完」，格内照常上色 */
-.prov-col { border-left: 1.5px dashed #9aa4b2 !important; border-right: 1.5px dashed #9aa4b2 !important; background: rgba(148,163,184,.05); }
-.prov-col.pc-top { border-top: 1.5px dashed #9aa4b2 !important; }
-.prov-col.pc-bot { border-bottom: 1.5px dashed #9aa4b2 !important; }
-.prov-tag { font-style: normal; font-size: 10px; font-weight: 600; color: #64748b; margin-left: 4px; padding: 0 4px; border: 1px dashed #9aa4b2; border-radius: 4px; }
+.prov-col { border-left: 1px dashed #d5dae2 !important; border-right: 1px dashed #d5dae2 !important; background: rgba(148,163,184,.025); }
+.prov-col.pc-top { border-top: 1px dashed #d5dae2 !important; }
+.prov-col.pc-bot { border-bottom: 1px dashed #d5dae2 !important; }
+.prov-tag { font-style: normal; font-size: 10px; font-weight: 500; color: #94a3b8; margin-left: 4px; padding: 0 4px; border: 1px dashed #dde1e7; border-radius: 4px; }
 .bs-row .num.prov-col { align-self: stretch; display: flex; align-items: center; justify-content: flex-end; padding-right: 4px; }
-.bs-row.bs-total .num.prov-col { border-bottom: 1.5px dashed #9aa4b2 !important; }
+.bs-row.bs-total .num.prov-col { border-bottom: 1px dashed #d5dae2 !important; }
 .bs-row:not(.bs-head) > .num.prov-col { margin: -7px 0; padding-top: 7px; padding-bottom: 7px; }
 .bs-row.bs-head > .num.prov-col { margin: -2px 0 -5px; padding-top: 2px; padding-bottom: 5px; }
