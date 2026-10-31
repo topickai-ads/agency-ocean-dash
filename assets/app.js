@@ -626,16 +626,14 @@
 
     /* 当日花费 + D0 净回收（只算当前视图匹配的量） */
     const spProd = {}, spAcc = {}, spCamp = {};
-    const n0Prod = {}, n0Acc = {}, n0Camp = {};
+    const nProd = {}, nAcc = {}, nCamp = {};
+    const addN = (o, k, n) => { const a = o[k] || (o[k] = new Array(NOFF).fill(0)); for (let i = 0; i < NOFF; i++) a[i] += (n && n[i]) || 0; };
     for (const r of ALL) {
       if (r.lv !== 'campaign' || r.d !== focus || !match(r, {})) continue;
-      const n0 = r.n[0] || 0;
       spProd[r.p] = (spProd[r.p] || 0) + r.spend;
       spAcc[r.acc] = (spAcc[r.acc] || 0) + r.spend;
       spCamp[r.acc + '|' + r.camp] = (spCamp[r.acc + '|' + r.camp] || 0) + r.spend;
-      n0Prod[r.p] = (n0Prod[r.p] || 0) + n0;
-      n0Acc[r.acc] = (n0Acc[r.acc] || 0) + n0;
-      n0Camp[r.acc + '|' + r.camp] = (n0Camp[r.acc + '|' + r.camp] || 0) + n0;
+      addN(nProd, r.p, r.n); addN(nAcc, r.acc, r.n); addN(nCamp, r.acc + '|' + r.camp, r.n);
     }
 
     const accProd = n => (acctMeta(n) || {}).product;
@@ -665,23 +663,25 @@
       ? `<button class="caret ${state.open.has(k) ? 'open' : ''}" data-bk="${k}" aria-label="展开"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
       : '<button class="caret blank" tabindex="-1"></button>';
 
-    const d0RateCell = (sp, n0) => {
-      if (!okSp(sp)) return '<span class="dim">—</span>';
-      if (!n0) return '<span class="dim">—</span>';
-      return ratePill((n0 / (sp * FEE)), 0);
-    };
+    const rateCells = (sp, n) => DKS.map(k => {
+      if (!okSp(sp) || !n) return '<div class="num"><span class="dim">—</span></div>';
+      const x = dkOf(n, sp, focus, k);
+      if (x.due && !x.net) return '<div class="num"><span class="dim">—</span></div>';
+      return `<div class="num">${dkCell(x, 0)}</div>`;
+    }).join('');
 
-    const row = (cls, k, has, nameHTML, sp, b, n0) => `
+    const row = (cls, k, has, nameHTML, sp, b, n) => `
       <div class="bs-row ${cls}${has ? ' can-open' : ''}"${has ? ` data-bk="${k}"` : ''}>
         <div class="nm">${caret(k, has)}${nameHTML}</div>
         <div class="num">${b ? fmt.money(b) : '<span class="dim">—</span>'}</div>
         <div class="num"><b>${fmt.money(sp)}</b></div>
         <div class="num">${paceCell(sp, b)}</div>
-        <div class="num">${d0RateCell(sp, n0)}</div>
+        ${rateCells(sp, n)}
       </div>`;
 
     let body = '';
-    let tSp = 0, tB = 0, tN0 = 0, anyB = false;
+    let tSp = 0, tB = 0, anyB = false;
+    const tN = new Array(NOFF).fill(0);
 
     for (const pid of pids) {
       const pk = 'b|p:' + pid;
@@ -691,10 +691,10 @@
       if (b) { tB += b; anyB = true; }
       tSp += sp;
 
-      const pn0 = n0Prod[pid] || 0;
-      tN0 += pn0;
+      const pn = nProd[pid] || null;
+      if (pn) for (let i = 0; i < NOFF; i++) tN[i] += pn[i];
       body += row('lv-prod', pk, true,
-        `<b>${esc(prod.short)}</b><em>${prodAccN[pid] || 0} 个账户</em>`, sp, b, pn0);
+        `<b>${esc(prod.short)}</b><em>${prodAccN[pid] || 0} 个账户</em>`, sp, b, pn);
 
       if (!state.open.has(pk)) continue;
 
@@ -706,7 +706,7 @@
         const ak = 'b|a:' + acc;
         const asp = spAcc[acc] || 0;
         const ab = B.known ? (B.acc[acc] || 0) : null;
-        body += row('lv-acc', ak, true, `${esc(acc)}<em>${esc((acctMeta(acc) || {}).country || '')}</em>`, asp, ab, n0Acc[acc] || 0);
+        body += row('lv-acc', ak, true, `${esc(acc)}<em>${esc((acctMeta(acc) || {}).country || '')}</em>`, asp, ab, nAcc[acc] || null);
 
         if (!state.open.has(ak)) continue;
 
@@ -718,7 +718,7 @@
           const name = k.slice(acc.length + 1);
           const csp = spCamp[k];
           const cb = cm ? (cm[name] || 0) : null;
-          body += row('lv-camp', 'b|c:' + k, false, esc(name), csp, cb, n0Camp[k] || 0);
+          body += row('lv-camp', 'b|c:' + k, false, esc(name), csp, cb, nCamp[k] || null);
         }
         if (!camps.length) body += `<div class="bs-row lv-camp"><div class="nm dim">这一天没有花费</div></div>`;
       }
@@ -734,6 +734,9 @@
           <div class="num">消耗</div>
           <div class="num">消耗比例</div>
           <div class="num">D0 回收率</div>
+          <div class="num">D1 回收率</div>
+          <div class="num">D3 回收率</div>
+          <div class="num">D7 回收率</div>
         </div>
         ${body || '<div class="bs-row"><div class="nm dim">这一天没有花费</div></div>'}
         <div class="bs-row bs-total">
@@ -741,7 +744,7 @@
           <div class="num">${anyB ? fmt.money(tB) : '<span class="dim">—</span>'}</div>
           <div class="num"><b>${fmt.money(tSp)}</b></div>
           <div class="num">${paceCell(tSp, anyB ? tB : null)}</div>
-          <div class="num">${d0RateCell(tSp, tN0)}</div>
+          ${rateCells(tSp, tN)}
         </div>`;
 
     return { html, anyB, tB, tSp, ledgerFrom };
@@ -762,8 +765,8 @@
     return T.anyB
       ? `预算 = 当天真在跑的 campaign 预算之和${live
           ? '；今天还没跑完，消耗比例收盘前会一直偏低'
-          : '（按变更日志回溯）；campaign 级预算 Meta 只给当前值，历史日留空'}。D0 回收率 = 当天安装用户净回收 ÷ 当日花费。`
-      : `当日预算没记账${T.ledgerFrom ? `（台账从 ${fmt.md(T.ledgerFrom)} 起）` : ''}，只显示消耗与 D0 回收率。`;
+          : '（按变更日志回溯）；campaign 级预算 Meta 只给当前值，历史日留空'}。D0 回收率 = 当天安装用户净回收 ÷ 当日花费×1.05；D1/D3/D7 为同一批安装用户累计到安装日+k 的净回收 ÷ 当日花费×1.05（累计率），未到观察日显示「还 N 天」。`
+      : `当日预算没记账${T.ledgerFrom ? `（台账从 ${fmt.md(T.ledgerFrom)} 起）` : ''}，只显示消耗与 D0/D1/D3/D7 回收率（累计率，未到观察日显示「还 N 天」）。`;
   }
 
   function budgetSpendCard(dates, focus, cur, focusIdx) {
@@ -1280,6 +1283,8 @@
         </td>
         <td>${ratePill(o.d0)}${o.est ? '<i class="est" title="这天没有这一条的回收归属，按花费分摊">估</i>' : ''}</td>
         <td>${d1.due ? ratePill(d1.rate) : d1.pend}</td>
+        <td>${dkCell(dkOf(o.n, o.spend, day, 3))}</td>
+        <td>${dkCell(dkOf(o.n, o.spend, day, 7))}</td>
         <td>${fmt.money(o.spend)}</td>
         <td><b>${fmt.money(o.n[0])}</b></td>
         <td>${d1.due ? fmt.money(d1.net) : d1.pend}</td>
@@ -1315,8 +1320,9 @@
 
     const total = tgt.reduce((a, o) => {
       a.spend += o.spend; a.p0 += o.p0; a.n0 += o.n[0]; a.n1 += (o.n[0] || 0) + (o.n[1] || 0);
+      for (let i = 0; i < NOFF; i++) a.n[i] += o.n[i] || 0;
       return a;
-    }, { spend: 0, p0: 0, n0: 0, n1: 0 });
+    }, { spend: 0, p0: 0, n0: 0, n1: 0, n: new Array(NOFF).fill(0) });
 
     return {
       lv, top: tgt, tf: TF, day,
@@ -1346,6 +1352,19 @@
     return { due: true, net, rate: okSp(o.spend) ? net / (o.spend * FEE) : null };
   }
 
+  /* 通用 Dk 累计率：累计到安装日+k 的净回收 ÷ 花费×1.05；未到观察日显示「还 N 天」 */
+  const DKS = [0, 1, 3, 7];
+  function dkOf(n, spend, day, k) {
+    if (addDays(day, k) > REV_UNTIL) {
+      const need = dayDiff(REV_UNTIL, addDays(day, k));
+      return { due: false, pend: `<span class="dim" title="这批人还没到安装日+${k}">还 ${need} 天</span>` };
+    }
+    let net = 0;
+    for (let i = 0; i <= k; i++) net += (n && n[i]) || 0;
+    return { due: true, net, rate: okSp(spend) ? net / (spend * FEE) : null };
+  }
+  const dkCell = (x, digits) => x.due ? ratePill(x.rate, digits) : x.pend;
+
   const TF_NAME = { bad: '红', warn: '黄', ok: '绿' };
   function drillFootHTML(c) {
     const f1 = d1Of({ spend: c.total.spend, n: [c.total.n1, 0] }, c.day);
@@ -1353,6 +1372,8 @@
         <td class="tree-cell">${lamp(c.rate)}<span class="txt">${c.top.length} 条${c.tf ? TF_NAME[c.tf] + '灯' : '在投'}${LV_NAME[c.lv]}</span></td>
         <td>${ratePill(c.rate)}</td>
         <td>${f1.due ? ratePill(f1.rate) : f1.pend}</td>
+        <td>${dkCell(dkOf(c.total.n, c.total.spend, c.day, 3))}</td>
+        <td>${dkCell(dkOf(c.total.n, c.total.spend, c.day, 7))}</td>
         <td>${fmt.money(c.total.spend)}</td>
         <td>${fmt.money(c.total.n0)}</td>
         <td>${f1.due ? fmt.money(f1.net) : f1.pend}</td>
@@ -1368,17 +1389,17 @@
 
     return `<div class="table-wrap"><table class="d drill-t" style="--name-col-w:${c.nameW}px">
       <colgroup>
-        <col class="c-name"><col class="c-rate"><col class="c-rate1"><col class="c-spend"><col class="c-d0"><col class="c-d1">
+        <col class="c-name"><col class="c-rate"><col class="c-rate1"><col class="c-rate1"><col class="c-rate1"><col class="c-spend"><col class="c-d0"><col class="c-d1">
         <col class="c-payers"><col class="c-cpa"><col class="c-spark">
       </colgroup>
       <thead>
         <tr class="grp">
           <th>名称</th>
-          <th colspan="7">${fmt.md(day)} 安装 cohort</th>
+          <th colspan="9">${fmt.md(day)} 安装 cohort</th>
           <th>近 ${win.length} 天 D0 净</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>D0 率</th><th title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率</th><th>花费</th><th>D0 净</th><th title="D0+安装日+1 累计净">D1 净</th><th>D0 付费人</th><th>D0 成本/人</th>
+          <th>账号 / Campaign / Adset / Ad</th><th>D0 率</th><th title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率</th><th title="累计到安装日+3 的净回收 ÷ 花费×1.05">D3 率</th><th title="累计到安装日+7 的净回收 ÷ 花费×1.05">D7 率</th><th>花费</th><th>D0 净</th><th title="D0+安装日+1 累计净">D1 净</th><th>D0 付费人</th><th>D0 成本/人</th>
           <th class="spark-cell">逐日</th>
         </tr>
       </thead>
@@ -1428,7 +1449,7 @@
           <div><span>D0 净</span><b>${fmt.money(node.n[0])}</b></div>
           <div><span>D0 率</span><b>${fmt.pct(node.d0)}</b></div>
           ${(() => { const dd = CUR_DAY || fd[fd.length - 1]; const nd = groupRows(f.lv, [dd], {}).find(o => o.key === f.key); const x = nd ? d1Of(nd, dd) : null;
-            return x ? `<div><span>${fmt.md(dd)} D1 净</span><b>${x.due ? fmt.money(x.net) : x.pend}</b></div><div><span>${fmt.md(dd)} D1 率</span><b>${x.due ? fmt.pct(x.rate) : x.pend}</b></div>` : ''; })()}
+            return x ? `<div><span>${fmt.md(dd)} D1 净</span><b>${x.due ? fmt.money(x.net) : x.pend}</b></div><div><span>${fmt.md(dd)} D1 率</span><b>${x.due ? fmt.pct(x.rate) : x.pend}</b></div>${[3, 7].map(k => { const y = dkOf(nd.n, nd.spend, dd, k); return `<div><span>${fmt.md(dd)} D${k} 率</span><b>${y.due ? fmt.pct(y.rate) : y.pend}</b></div>`; }).join('')}` : ''; })()}
           <div><span>累计率</span><b>${fmt.pct(node.cumRate, 0)}</b></div>
         </div>
         <div class="focus-chart">${spendChart}<div class="cap">每日花费</div></div>
@@ -1493,7 +1514,7 @@
 `;
     main.innerHTML = state.tab === 'recovery' ? recHTML : `
       <section class="sect">
-        ${sec('01', '预算 · 消耗 · D0 回收率',
+        ${sec('01', '预算 · 消耗 · 回收率',
           `左表：产品 → 账户 → campaign 逐层展开${IS_AG ? '' : ' · 含自投 zt'} · 右图：每日花费走势`,
           budFocus
             ? `<b>${fmt.money(cur.spendA)}</b> / ${fmt.money(budFocus)} · 消耗比例 ${fmt.pct(usedNow, 0)}`
@@ -1886,7 +1907,7 @@
         <li><b>Cohort 累计回收</b> = 那一天的新增，从 D0 到报表日的累计净回收 ÷ 那天的花费。各批观察期不同，越新越低是正常的。</li>
         <li><b>净回收</b> = Google Play ×0.70 + Stripe ×0.70（均按 30% 抽成），剔除内部/测试账号。；回收率分母 = Meta spend ×1.05（含代理服务费 5%）。</li>
         <li><b>单个新增付费用户成本</b> = 花费 / D0 付费人数。只看趋势，不设基线。</li>
-        <li><b>四层明细 D1</b> = 同一批安装用户到安装日+1（北京自然日，非滚动 24h）的累计净回收 ÷ 当天花费×1.05；未到安装日+1 显示「还 N 天」。灯仍只看 D0。</li>
+        <li><b>四层明细 / 预算表 D0·D1·D3·D7 率</b> = 同一批安装用户累计到安装日+k（北京自然日，非滚动 24h）的净回收 ÷ 当天花费×1.05（累计率）；未到安装日+k 显示「还 N 天」。灯与红黄绿筛选仍只看 D0。</li>
         <li><b>灯</b>：D0 ≥ ${fmt.pct(LIGHT.ok, 0)} 绿、${fmt.pct(LIGHT.warn, 0)}–${fmt.pct(LIGHT.ok, 0)} 黄、&lt; ${fmt.pct(LIGHT.warn, 0)} 红；样本太小的产品不打灯。</li>
         <li><b>消耗只看趋势</b>：每日花费是 Meta 实时拉的账单数，不再拿它跟固定预算比；预算只在预算卡里按账户看完成度。</li>
       </ul>

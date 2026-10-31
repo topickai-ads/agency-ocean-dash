@@ -907,7 +907,7 @@ tr.lv-adset .txt b, tr.lv-ad .txt b { color: var(--ink-2); font-weight: 600; }
 }
 .bs-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 84px 84px 118px 88px;
+  grid-template-columns: minmax(0, 1fr) 76px 76px 112px 72px 72px 72px 72px;
   align-items: center; gap: 10px;
   padding: 7px 4px;
   border-top: 1px solid var(--line-soft);
@@ -969,7 +969,7 @@ tr.lv-adset .txt b, tr.lv-ad .txt b { color: var(--ink-2); font-weight: 600; }
 .bs-spend .card-head { padding: 0 0 4px; }
 
 @media (max-width: 1000px) {
-  .bs-row { grid-template-columns: minmax(0, 1fr) 68px 68px 92px 72px; gap: 6px; font-size: calc(11.5px * var(--fs-scale)); }
+  .bs-row { grid-template-columns: minmax(150px, 1fr) 60px 60px 84px 56px 56px 56px 56px; gap: 6px; font-size: calc(11.5px * var(--fs-scale)); }
   .pace-bar { width: 34px; }
 }
 
@@ -1004,7 +1004,7 @@ i.est {
 }
 
 /* 下钻表：列宽固定，展开更深一层时右侧数字列不会重排 */
-table.d.drill-t { table-layout: fixed; width: 100%; min-width: 900px; }
+table.d.drill-t { table-layout: fixed; width: 100%; min-width: 1080px; }
 table.d.drill-t col.c-name { width: auto; }
 table.d.drill-t col.c-spend { width: 96px; }
 table.d.drill-t col.c-d0 { width: 96px; }
@@ -1033,7 +1033,7 @@ table.d.drill-t .spark-cell { padding-left: 8px; padding-right: 10px; }
   table.d th:first-child, table.d td:first-child { padding-left: 10px; }
   table.d th:last-child, table.d td:last-child { padding-right: 10px; }
 
-  table.d.drill-t { min-width: 640px; }
+  table.d.drill-t { min-width: 800px; }
   table.d.drill-t col.c-spend { width: 78px; }
   table.d.drill-t col.c-d0 { width: 78px; }
   table.d.drill-t col.c-rate { width: 96px; }
@@ -1201,3 +1201,7 @@ html,body{overflow-x:clip !important}
 /* 字号放大：窄屏收敛 */
 @media (max-width: 720px) { :root { --fs-scale: 1.08; } }
 html, body { line-height: 1.55; }
+
+/* 预算表加 D1/D3/D7 后窄屏横向滚动 */
+.bs-table { overflow-x: auto; }
+.bs-table .bs-row { min-width: 620px; }
