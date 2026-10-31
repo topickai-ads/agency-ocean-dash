@@ -1206,6 +1206,10 @@ html, body { line-height: 1.55; }
 .bs-table { overflow-x: auto; }
 .bs-table .bs-row { min-width: 620px; }
 
-/* Dk 观察日未走完：临时率，与定论色块区分 */
-.pill.prov { background: #f4f5f7; color: #8a93a0; border: 1px dashed #c3c9d2; font-style: italic; white-space: nowrap; }
-.pill.prov i { font-style: normal; font-size: 10px; margin-left: 4px; color: #98a2b3; }
+/* Dk 观察日当天未结束：整列虚线框 + 表头「未完」，格内照常上色 */
+.prov-col { border-left: 1.5px dashed #9aa4b2 !important; border-right: 1.5px dashed #9aa4b2 !important; background: rgba(148,163,184,.05); }
+.prov-col.pc-top { border-top: 1.5px dashed #9aa4b2 !important; }
+.prov-col.pc-bot { border-bottom: 1.5px dashed #9aa4b2 !important; }
+.prov-tag { font-style: normal; font-size: 10px; font-weight: 600; color: #64748b; margin-left: 4px; padding: 0 4px; border: 1px dashed #9aa4b2; border-radius: 4px; }
+.bs-row .num.prov-col { align-self: stretch; display: flex; align-items: center; justify-content: flex-end; padding-right: 4px; }
+.bs-row.bs-total .num.prov-col { border-bottom: 1.5px dashed #9aa4b2 !important; }
