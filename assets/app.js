@@ -1266,6 +1266,7 @@
     };
 
     const rowHTML = (o, rowLv, label, extra, hasChild, key, depth) => {
+      const d1 = d1Of(o, day);
       const net7 = win.map(d => (o.byDay.get(d) || {}).n0 || 0);
       const caret = hasChild
         ? `<button class="caret ${state.open.has(key) ? 'open' : ''}" data-k="${encodeURIComponent(key)}" aria-label="展开"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
@@ -1278,8 +1279,10 @@
           <span class="txt${(onOf(o, rowLv) || {}).on === false ? ' is-off' : ''}" title="${esc(label)}${(() => { const s = onOf(o, rowLv); return s ? ' · ' + esc(s.tip) : ''; })()}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>${stBadge(o, rowLv)}
         </td>
         <td>${ratePill(o.d0)}${o.est ? '<i class="est" title="这天没有这一条的回收归属，按花费分摊">估</i>' : ''}</td>
+        <td>${d1.due ? ratePill(d1.rate) : d1.pend}</td>
         <td>${fmt.money(o.spend)}</td>
         <td><b>${fmt.money(o.n[0])}</b></td>
+        <td>${d1.due ? fmt.money(d1.net) : d1.pend}</td>
         <td class="dim">${fmt.num(o.p0)}</td>
         <td>${o.cpa ? fmt.money(o.cpa) : '<span class="dim">—</span>'}</td>
         <td class="spark-cell">${sparkSvg(net7, { kind: 'bar', w: 62, h: 18, color: o.n[0] >= o.spend * BENCH ? '#a7e3c3' : '#f5c4bd' })}</td>
@@ -1311,12 +1314,12 @@
     };
 
     const total = tgt.reduce((a, o) => {
-      a.spend += o.spend; a.p0 += o.p0; a.n0 += o.n[0];
+      a.spend += o.spend; a.p0 += o.p0; a.n0 += o.n[0]; a.n1 += (o.n[0] || 0) + (o.n[1] || 0);
       return a;
-    }, { spend: 0, p0: 0, n0: 0 });
+    }, { spend: 0, p0: 0, n0: 0, n1: 0 });
 
     return {
-      lv, top: tgt, tf: TF,
+      lv, top: tgt, tf: TF, day,
       nameW: Math.ceil(measureAll('account', top, 0)),
       body: renderRows('account', top, 0),
       total,
@@ -1332,13 +1335,27 @@
     return _tw.measureText(String(t)).width;
   }
 
+  /* 四层明细 D1：同一批安装到安装日+1（北京自然日）的累计净 ÷ 当天花费；灯仍看 D0 */
+  function d1Of(o, day) {
+    if (addDays(day, 1) > REV_UNTIL) {
+      const need = dayDiff(REV_UNTIL, addDays(day, 1));
+      return { due: false, pend: `<span class="dim" title="这批人还没到安装日+1">还 ${need} 天</span>` };
+    }
+    const n = o.n || [];
+    const net = (n[0] || 0) + (n[1] || 0);
+    return { due: true, net, rate: okSp(o.spend) ? net / (o.spend * FEE) : null };
+  }
+
   const TF_NAME = { bad: '红', warn: '黄', ok: '绿' };
   function drillFootHTML(c) {
+    const f1 = d1Of({ spend: c.total.spend, n: [c.total.n1, 0] }, c.day);
     return `<tr>
         <td class="tree-cell">${lamp(c.rate)}<span class="txt">${c.top.length} 条${c.tf ? TF_NAME[c.tf] + '灯' : '在投'}${LV_NAME[c.lv]}</span></td>
         <td>${ratePill(c.rate)}</td>
+        <td>${f1.due ? ratePill(f1.rate) : f1.pend}</td>
         <td>${fmt.money(c.total.spend)}</td>
         <td>${fmt.money(c.total.n0)}</td>
+        <td>${f1.due ? fmt.money(f1.net) : f1.pend}</td>
         <td>${fmt.num(c.total.p0)}</td>
         <td>${c.total.p0 ? fmt.money(c.total.spend / c.total.p0) : '—'}</td>
         <td></td>
@@ -1351,17 +1368,17 @@
 
     return `<div class="table-wrap"><table class="d drill-t" style="--name-col-w:${c.nameW}px">
       <colgroup>
-        <col class="c-name"><col class="c-rate"><col class="c-spend"><col class="c-d0">
+        <col class="c-name"><col class="c-rate"><col class="c-rate1"><col class="c-spend"><col class="c-d0"><col class="c-d1">
         <col class="c-payers"><col class="c-cpa"><col class="c-spark">
       </colgroup>
       <thead>
         <tr class="grp">
           <th>名称</th>
-          <th colspan="5">${fmt.md(day)} 当日</th>
+          <th colspan="7">${fmt.md(day)} 安装 cohort</th>
           <th>近 ${win.length} 天 D0 净</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>D0 率</th><th>花费</th><th>D0 净</th><th>付费人</th><th>成本/人</th>
+          <th>账号 / Campaign / Adset / Ad</th><th>D0 率</th><th title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率</th><th>花费</th><th>D0 净</th><th title="D0+安装日+1 累计净">D1 净</th><th>D0 付费人</th><th>D0 成本/人</th>
           <th class="spark-cell">逐日</th>
         </tr>
       </thead>
@@ -1410,6 +1427,8 @@
           <div><span>成本/人</span><b>${node.cpa ? fmt.money(node.cpa) : '—'}</b></div>
           <div><span>D0 净</span><b>${fmt.money(node.n[0])}</b></div>
           <div><span>D0 率</span><b>${fmt.pct(node.d0)}</b></div>
+          ${(() => { const dd = CUR_DAY || fd[fd.length - 1]; const nd = groupRows(f.lv, [dd], {}).find(o => o.key === f.key); const x = nd ? d1Of(nd, dd) : null;
+            return x ? `<div><span>${fmt.md(dd)} D1 净</span><b>${x.due ? fmt.money(x.net) : x.pend}</b></div><div><span>${fmt.md(dd)} D1 率</span><b>${x.due ? fmt.pct(x.rate) : x.pend}</b></div>` : ''; })()}
           <div><span>累计率</span><b>${fmt.pct(node.cumRate, 0)}</b></div>
         </div>
         <div class="focus-chart">${spendChart}<div class="cap">每日花费</div></div>
@@ -1867,6 +1886,7 @@
         <li><b>Cohort 累计回收</b> = 那一天的新增，从 D0 到报表日的累计净回收 ÷ 那天的花费。各批观察期不同，越新越低是正常的。</li>
         <li><b>净回收</b> = Google Play ×0.70 + Stripe ×0.70（均按 30% 抽成），剔除内部/测试账号。；回收率分母 = Meta spend ×1.05（含代理服务费 5%）。</li>
         <li><b>单个新增付费用户成本</b> = 花费 / D0 付费人数。只看趋势，不设基线。</li>
+        <li><b>四层明细 D1</b> = 同一批安装用户到安装日+1（北京自然日，非滚动 24h）的累计净回收 ÷ 当天花费×1.05；未到安装日+1 显示「还 N 天」。灯仍只看 D0。</li>
         <li><b>灯</b>：D0 ≥ ${fmt.pct(LIGHT.ok, 0)} 绿、${fmt.pct(LIGHT.warn, 0)}–${fmt.pct(LIGHT.ok, 0)} 黄、&lt; ${fmt.pct(LIGHT.warn, 0)} 红；样本太小的产品不打灯。</li>
         <li><b>消耗只看趋势</b>：每日花费是 Meta 实时拉的账单数，不再拿它跟固定预算比；预算只在预算卡里按账户看完成度。</li>
       </ul>

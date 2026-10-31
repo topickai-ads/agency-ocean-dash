@@ -1004,11 +1004,13 @@ i.est {
 }
 
 /* 下钻表：列宽固定，展开更深一层时右侧数字列不会重排 */
-table.d.drill-t { table-layout: fixed; width: 100%; min-width: 720px; }
+table.d.drill-t { table-layout: fixed; width: 100%; min-width: 900px; }
 table.d.drill-t col.c-name { width: auto; }
 table.d.drill-t col.c-spend { width: 96px; }
 table.d.drill-t col.c-d0 { width: 96px; }
 table.d.drill-t col.c-rate { width: 118px; }
+table.d.drill-t col.c-rate1 { width: 96px; }
+table.d.drill-t col.c-d1 { width: 96px; }
 table.d.drill-t col.c-payers { width: 76px; }
 table.d.drill-t col.c-cpa { width: 88px; }
 table.d.drill-t col.c-spark { width: 86px; }
@@ -1035,6 +1037,8 @@ table.d.drill-t .spark-cell { padding-left: 8px; padding-right: 10px; }
   table.d.drill-t col.c-spend { width: 78px; }
   table.d.drill-t col.c-d0 { width: 78px; }
   table.d.drill-t col.c-rate { width: 96px; }
+  table.d.drill-t col.c-rate1 { width: 80px; }
+  table.d.drill-t col.c-d1 { width: 78px; }
   table.d.drill-t col.c-payers { width: 64px; }
   table.d.drill-t col.c-cpa { width: 72px; }
   table.d.drill-t col.c-spark { width: 70px; }
