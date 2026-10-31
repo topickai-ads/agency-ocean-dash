@@ -380,6 +380,23 @@
 
     let maxV = niceMax(peak * 1.12, c.stepI);
 
+    /* 稳健上限：薄样本日（如盘中 1 付费人 D0≈1300%）会把纵轴撑爆，历史天和基准线被压成贴底直线。
+       用次高值做稳健峰，真实 max 远超它时轴只盖到稳健峰；尖刺点夹在轴顶，圆点/tooltip 仍是真实值。 */
+    if (!c.stack && c.vals && !c.noRobust) {
+      const fv = c.vals.filter(o => o.v != null && isFinite(o.v)).map(o => o.v).sort((a, b) => a - b);
+      if (fv.length >= 3) {
+        const realMax = fv[fv.length - 1], robust = fv[fv.length - 2];
+        const thr = c.ref != null ? Math.max(robust * 2.5, c.ref * 4, 1.0) : robust * 2.5;
+        if (realMax > thr) {
+          let rp = Math.max(robust, c.ref || 0);
+          if (c.ref != null) rp = Math.max(rp, 1.0);   // 比率图至少到 100%，起伏可读
+          if (c.refSeries) c.refSeries.forEach(v => { if (v != null && v < realMax) rp = Math.max(rp, v); });
+          if (c.steps) c.steps.forEach(v => { if (v != null && v < realMax) rp = Math.max(rp, v); });
+          maxV = niceMax(rp * 1.12, c.stepI || c.gstep);
+        }
+      }
+    }
+
     /* 折线图不强制从 0 起：否则日消耗在 1.2k–1.5k 之间波动时曲线是条直线，看不出趋势。
        柱状图和带参考线的比率图仍然从 0 起。 */
     let baseV = 0;
@@ -409,7 +426,8 @@
     }
 
     let grid = '';
-    const gstep = c.gstep || niceStep((maxV - baseV) / 4.5);
+    let gstep = c.gstep || niceStep((maxV - baseV) / 4.5);
+    if ((maxV - baseV) / gstep > 10) gstep = niceStep((maxV - baseV) / 4.5);   // 防网格/刻度过密叠字
     let gi = 0;
     for (let v = baseV; v <= maxV + 1e-9; v += gstep, gi++) {
       const yy = y(v);
