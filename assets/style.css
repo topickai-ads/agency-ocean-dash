@@ -956,11 +956,8 @@ tr.lv-adset .txt b, tr.lv-ad .txt b { color: var(--ink-2); font-weight: 600; }
   width: 54px; height: 4px; border-radius: 2px;
   background: #eef1f6; overflow: hidden; flex: none;
 }
-.pace-bar i { display: block; height: 100%; border-radius: 2px; background: #cfe0ff; }
-.pace-bar i.ok { background: #7fd0a8; }
-.pace-bar i.warn { background: #f0c169; }
-.pace-bar i.over, .pace-bar i.low { background: #f0a6a0; }
-.pace b { font-weight: 620; font-variant-numeric: tabular-nums; }
+.pace-bar i { display: block; height: 100%; border-radius: 2px; background: #8fa8d6; }
+.pace b { color: var(--ink); font-weight: 620; font-variant-numeric: tabular-nums; }
 
 .bs-spend {
   margin: 4px 14px 12px; padding-top: 10px;

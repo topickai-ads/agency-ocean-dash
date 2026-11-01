@@ -590,23 +590,13 @@
 
   /* ---------------- 02 预算 · 消耗 · 消耗比例（一张表，逐层下钻） ---------------- */
 
-  /* 消耗率配色：>100% 超支、85–100% 正常、60–85% 偏慢、<60% 明显没花到 */
-  function paceCls(r) {
-    if (r == null) return '';
-    if (r > 1) return 'over';
-    if (r >= 0.85) return 'ok';
-    if (r >= 0.6) return 'warn';
-    return 'low';
-  }
-
+  /* 投放进度：中性进度条（不用红黄绿，避免和 D0 回收灯混淆） */
   function paceCell(sp, b) {
     if (!b) return '<span class="dim">—</span>';
     const r = sp / b;
-    const c = paceCls(r);
-    const tone = r > 1 || c === 'low' ? 'tone-bad' : c === 'warn' ? 'tone-warn' : '';
     return `<div class="pace">
-      <span class="pace-bar"><i class="${c}" style="width:${Math.min(r * 100, 100).toFixed(0)}%"></i></span>
-      <b class="${tone}">${fmt.pct(r, 0)}</b>
+      <span class="pace-bar"><i style="width:${Math.min(r * 100, 100).toFixed(0)}%"></i></span>
+      <b>${fmt.pct(r, 0)}</b>
     </div>`;
   }
 
@@ -614,9 +604,7 @@
     if (!b) return '<span class="dim">—</span>';
     const g = b - sp;
     if (Math.abs(g) < 1) return '<span class="dim">刚好</span>';
-    return g > 0
-      ? `<span class="tone-warn">差 ${fmt.money(g)}</span>`
-      : `<span class="tone-bad">超 ${fmt.money(-g)}</span>`;
+    return g > 0 ? `<span>差 ${fmt.money(g)}</span>` : `<span>超 ${fmt.money(-g)}</span>`;
   }
 
   /* 表体（名称/预算/消耗/消耗比例）—— 展开时只换这一块，整页不重绘 */
