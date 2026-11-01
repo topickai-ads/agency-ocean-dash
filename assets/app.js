@@ -1831,7 +1831,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       `花费 <b>${hms(M.spend_pulled_at || M.generated_at)}</b>` +
       ` · 回收实时 <b>${hms(M.live_revenue_at || M.generated_at)}</b>`);
 
-    const sched = (M.refresh_hours_bj && M.refresh_hours_bj.length ? M.refresh_hours_bj : [0, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]).slice().sort((a, b) => a - b);
+    const sched = (M.refresh_hours_bj && M.refresh_hours_bj.length ? M.refresh_hours_bj : [0, 3, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]).slice().sort((a, b) => a - b);
     const bjNow = new Date(Date.now() + 8 * 3600e3);
     const curH = bjNow.getUTCHours() + bjNow.getUTCMinutes() / 60;
     const nh = sched.find(h => h > curH);
@@ -1839,7 +1839,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     const nextTxt = nh === undefined ? `明天 ${p2(sched[0])}:00` : `${p2(nh)}:00`;
     /* 某刷新档已过 45 分钟而线上数据仍停在该档之前：顶栏标红，避免静默停在旧时间戳 */
     if (ok) {
-      const slots = sched.length ? sched : [0, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+      const slots = sched.length ? sched : [0, 3, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
       const bjMs = Date.now() + 8 * 3600e3;
       const bj = new Date(bjMs);
       const y = bj.getUTCFullYear(), mo = bj.getUTCMonth(), da = bj.getUTCDate();
@@ -1873,7 +1873,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       }
     }
 
-    put('nextRefresh', `刷新 0/6 点 + 白天 8–22 每小时 · 下次 <b>${nextTxt}</b>`);
+    put('nextRefresh', `刷新 0/3/6 点 + 白天 8–24（0）每小时 · 下次 <b>${nextTxt}</b>`);
 
     const fc = document.getElementById('footCount');
     if (fc) fc.textContent = `${DATES[0]} ~ ${TODAY} · ${ALL.length} 行 · 回收明细到 ${REV_UNTIL}`;
@@ -1921,7 +1921,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
       <h3>数据更新</h3>
       <ul>
-        <li>北京时间 0、6 点，白天 8–22 点每小时自动刷新（0/6/8–22）；夜里不加频。</li>
+        <li>北京时间 0、3、6 点，白天 8–23 点每小时自动刷新（0/3/6/8–23，24 点即 0 点）；夜里不加频。</li>
         <li>0 点是日切后第一刷，此时更新「今天」。</li>
         <li>数据非实时秒级，以顶栏「数据更新于」时间为准。</li>
         <li>顶栏「拉取最新」：一点立刻触发后台真拉 Meta/回收并推 Pages（webhook）；通常 1–2 分钟完成，页面最多等约 6 分钟。</li>
