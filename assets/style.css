@@ -1214,3 +1214,13 @@ html, body { line-height: 1.55; }
 .bs-row.bs-total .num.prov-col { border-bottom: 1px dashed #d5dae2 !important; }
 .bs-row:not(.bs-head) > .num.prov-col { margin: -7px 0; padding-top: 7px; padding-bottom: 7px; }
 .bs-row.bs-head > .num.prov-col { margin: -2px 0 -5px; padding-top: 2px; padding-bottom: 5px; }
+
+/* 表头口径小圆 i */
+.tip-i {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; margin-left: 3px; vertical-align: 1px;
+  border-radius: 50%; border: 1px solid #94a3b8; color: #64748b;
+  font-style: normal; font-size: 10px; font-weight: 700; line-height: 1;
+  cursor: help; user-select: none;
+}
+.tip-i:hover, .tip-i:focus { border-color: #2563eb; color: #2563eb; outline: none; background: #eff6ff; }

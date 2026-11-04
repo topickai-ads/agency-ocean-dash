@@ -1371,6 +1371,9 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
   const dkCell = (x, digits) => x.due ? ratePill(x.rate, digits) : x.pend;
 
   const TF_NAME = { bad: '红', warn: '黄', ok: '绿' };
+  /* 表头带圈 i：桌面 hover / 可聚焦；原生 title 手机长按也常能出 */
+  const tipI = (txt) => `<i class="tip-i" title="${esc(txt)}" tabindex="0" aria-label="说明">i</i>`;
+
   /* CPP = 近3日花费 ÷ 近3日窗口付费人（装日 cohort；美 D0+D1 unique / 韩日 D0）。
      密度带（绝对线，禁止跟代理比）：≤$40 好 / $40–70 边缘 / >$70 或窗内 0 付费且花够($100) 差 */
   function cppOf(spend3, payers3) {
@@ -1424,7 +1427,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
           <th>近 ${win.length} 天 D0 净</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>D0 率</th><th title="今日 CPP = 焦点日当天花费 ÷ 当天窗口付费人（美D0+D1/韩日D0）。密度带同近3日；关停仍以近3日为准；不跟代理比">今日 CPP</th><th title="近3日 CPP = 近3日花费 ÷ 近3日窗口付费人（美D0+D1/韩日D0），焦点日为末日含当日共3天。先看 CPP 再看 D0；≤$40 好 · $40–70 边缘 · >$70 或 0 付费差；关停以近3日为准；不跟代理比">近3日 CPP</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th${pc(day, 3, 'pc-top')} title="累计到安装日+3 的净回收 ÷ 花费×1.05">D3 率${provTag(day, 3)}</th><th${pc(day, 7, 'pc-top')} title="累计到安装日+7 的净回收 ÷ 花费×1.05">D7 率${provTag(day, 7)}</th><th>花费</th><th>D0 净</th><th${pc(day, 1, 'pc-top')} title="D0+安装日+1 累计净">D1 净${provTag(day, 1)}</th><th>D0 付费人</th><th>D0 成本/人</th>
+          <th>账号 / Campaign / Adset / Ad</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。灯与红黄绿筛选只看本列。')}</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天窗口付费人（美线 D0+D1 unique / 韩日 D0）。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日窗口付费人（焦点日为末日含当日共 3 天；美 D0+D1 / 韩日 D0）。关停判断看本列。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th${pc(day, 3, 'pc-top')} title="累计到安装日+3 的净回收 ÷ 花费×1.05">D3 率${provTag(day, 3)}</th><th${pc(day, 7, 'pc-top')} title="累计到安装日+7 的净回收 ÷ 花费×1.05">D7 率${provTag(day, 7)}</th><th>花费</th><th>D0 净</th><th${pc(day, 1, 'pc-top')} title="D0+安装日+1 累计净">D1 净${provTag(day, 1)}</th><th>D0 付费人</th><th>D0 成本/人</th>
           <th class="spark-cell">逐日</th>
         </tr>
       </thead>
