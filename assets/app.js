@@ -281,12 +281,15 @@
       const k = keyOf(lv, r);
       const a = m.get(k) || {
         key: k, camp: r.camp, ads: r.ads, ad: r.ad, acc: r.acc, ctry: r.ctry,
-        spend: 0, p0: 0, n: new Array(NOFF).fill(0), byDay: new Map()
+        spend: 0, p0: 0, p01: 0, pc: 0, n: new Array(NOFF).fill(0), byDay: new Map()
       };
       a.spend += r.spend; a.p0 += r.p0;
+      /* CPP 付费人口径：美线 D0+D1 unique（p01），韩/日等 D0（p0）；按行 ctry 取，混合节点逐行加总 */
+      const p01 = r.p01 != null ? r.p01 : r.p0;
+      a.p01 += p01; a.pc += (r.ctry === 'US' ? p01 : r.p0);
       for (let i = 0; i < NOFF; i++) a.n[i] += r.n[i] || 0;
-      const dd = a.byDay.get(r.d) || { spend: 0, p0: 0, n0: 0 };
-      dd.spend += r.spend; dd.p0 += r.p0; dd.n0 += r.n[0] || 0;
+      const dd = a.byDay.get(r.d) || { spend: 0, p0: 0, p01: 0, n0: 0 };
+      dd.spend += r.spend; dd.p0 += r.p0; dd.p01 += p01; dd.n0 += r.n[0] || 0;
       a.byDay.set(r.d, dd);
       m.set(k, a);
     }
@@ -1181,7 +1184,13 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     const lv = state.level;
     const cache = {};
     const kidsOf = l => {
-      if (!cache[l]) cache[l] = groupRows(l, [day], { withQ: true });
+      if (!cache[l]) {
+        cache[l] = groupRows(l, [day], { withQ: true });
+        /* CPP：焦点日为末日的近 3 个自然日（含焦点日），缺日按 0 */
+        const w3 = [addDays(day, -2), addDays(day, -1), day];
+        const m3 = new Map(groupRows(l, w3, { withQ: true }).map(x => [x.key, x]));
+        cache[l].forEach(o => { const x = m3.get(o.key); o.spend3 = x ? x.spend : 0; o.payers3 = x ? x.pc : 0; });
+      }
       return cache[l];
     };
     /* 层级 = 展开目标深度；颜色只滤目标层。树永远从 account 画起，祖先仅在有可见目标层子孙时显示 */
@@ -1269,6 +1278,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
           <span class="txt${(onOf(o, rowLv) || {}).on === false ? ' is-off' : ''}" title="${esc(label)}${(() => { const s = onOf(o, rowLv); return s ? ' · ' + esc(s.tip) : ''; })()}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>${stBadge(o, rowLv)}
         </td>
         <td>${ratePill(o.d0)}${o.est ? '<i class="est" title="这天没有这一条的回收归属，按花费分摊">估</i>' : ''}</td>
+        <td>${cppCell(o.spend3, o.payers3, day)}</td>
         <td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td>
         <td${pc(day, 3)}>${dkCell(dkOf(o.n, o.spend, day, 3))}</td>
         <td${pc(day, 7)}>${dkCell(dkOf(o.n, o.spend, day, 7))}</td>
@@ -1306,10 +1316,10 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     };
 
     const total = tgt.reduce((a, o) => {
-      a.spend += o.spend; a.p0 += o.p0; a.n0 += o.n[0]; a.n1 += (o.n[0] || 0) + (o.n[1] || 0);
+      a.spend += o.spend; a.p0 += o.p0; a.n0 += o.n[0]; a.spend3 += o.spend3 || 0; a.payers3 += o.payers3 || 0; a.n1 += (o.n[0] || 0) + (o.n[1] || 0);
       for (let i = 0; i < NOFF; i++) a.n[i] += o.n[i] || 0;
       return a;
-    }, { spend: 0, p0: 0, n0: 0, n1: 0, n: new Array(NOFF).fill(0) });
+    }, { spend: 0, p0: 0, n0: 0, n1: 0, spend3: 0, payers3: 0, n: new Array(NOFF).fill(0) });
 
     return {
       lv, top: tgt, tf: TF, day,
@@ -1360,11 +1370,28 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
   const dkCell = (x, digits) => x.due ? ratePill(x.rate, digits) : x.pend;
 
   const TF_NAME = { bad: '红', warn: '黄', ok: '绿' };
+  /* CPP = 近3日花费 ÷ 近3日窗口付费人（装日 cohort；美 D0+D1 unique / 韩日 D0）。
+     密度带（绝对线，禁止跟代理比）：≤$40 好 / $40–70 边缘 / >$70 或窗内 0 付费且花够($100) 差 */
+  function cppOf(spend3, payers3) {
+    if (payers3 > 0) return spend3 / payers3;
+    return spend3 > 0 ? Infinity : null;
+  }
+  function cppCell(spend3, payers3, day) {
+    const v = cppOf(spend3 || 0, payers3 || 0);
+    if (v == null) return '<span class="dim">—</span>';
+    const tip = `CPP（${fmt.md(addDays(day, -2))}–${fmt.md(day)} 近3日）= 近3日花费 ${fmt.money(spend3)} ÷ 近3日窗口付费人 ${fmt.num(payers3)}（美D0+D1/韩日D0）。≤$40 好 · $40–70 边缘 · >$70 或 0 付费差；不跟代理比`;
+    let tone, txt;
+    if (v === Infinity) { tone = spend3 >= 100 ? 'bad' : ''; txt = '无付费'; }
+    else { tone = v <= 40 ? 'ok' : v <= 70 ? 'warn' : 'bad'; txt = fmt.money(v); }
+    const col = { ok: 'color:#15803d;background:#dcfce7', warn: 'color:#a16207;background:#fef9c3', bad: 'color:#b91c1c;background:#fee2e2' }[tone] || 'color:#6b7280';
+    return `<span class="cpp-band" style="${col};padding:1px 6px;border-radius:6px;font-weight:600;white-space:nowrap" title="${esc(tip)}">${txt}</span>`;
+  }
   function drillFootHTML(c) {
     const f1 = d1Of({ spend: c.total.spend, n: [c.total.n1, 0] }, c.day);
     return `<tr>
         <td class="tree-cell">${lamp(c.rate)}<span class="txt">${c.top.length} 条${c.tf ? TF_NAME[c.tf] + '灯' : '在投'}${LV_NAME[c.lv]}</span></td>
         <td>${ratePill(c.rate)}</td>
+        <td>${cppCell(c.total.spend3, c.total.payers3, c.day)}</td>
         <td${pc(c.day, 1, 'pc-bot')}>${f1.due ? ratePill(f1.rate) : f1.pend}</td>
         <td${pc(c.day, 3, 'pc-bot')}>${dkCell(dkOf(c.total.n, c.total.spend, c.day, 3))}</td>
         <td${pc(c.day, 7, 'pc-bot')}>${dkCell(dkOf(c.total.n, c.total.spend, c.day, 7))}</td>
@@ -1383,17 +1410,17 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
     return `<div class="table-wrap"><table class="d drill-t" style="--name-col-w:${c.nameW}px">
       <colgroup>
-        <col class="c-name"><col class="c-rate"><col class="c-rate1"><col class="c-rate1"><col class="c-rate1"><col class="c-spend"><col class="c-d0"><col class="c-d1">
+        <col class="c-name"><col class="c-rate"><col class="c-cpp"><col class="c-rate1"><col class="c-rate1"><col class="c-rate1"><col class="c-spend"><col class="c-d0"><col class="c-d1">
         <col class="c-payers"><col class="c-cpa"><col class="c-spark">
       </colgroup>
       <thead>
         <tr class="grp">
           <th>名称</th>
-          <th colspan="9">${fmt.md(day)} 安装 cohort</th>
+          <th colspan="10">${fmt.md(day)} 安装 cohort</th>
           <th>近 ${win.length} 天 D0 净</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>D0 率</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th${pc(day, 3, 'pc-top')} title="累计到安装日+3 的净回收 ÷ 花费×1.05">D3 率${provTag(day, 3)}</th><th${pc(day, 7, 'pc-top')} title="累计到安装日+7 的净回收 ÷ 花费×1.05">D7 率${provTag(day, 7)}</th><th>花费</th><th>D0 净</th><th${pc(day, 1, 'pc-top')} title="D0+安装日+1 累计净">D1 净${provTag(day, 1)}</th><th>D0 付费人</th><th>D0 成本/人</th>
+          <th>账号 / Campaign / Adset / Ad</th><th>D0 率</th><th title="先看 CPP 再看 D0。CPP = 近3日花费 ÷ 近3日窗口付费人（美D0+D1/韩日D0），焦点日为末日含当日共3天；≤$40 好 · $40–70 边缘 · >$70 或 0 付费差；不跟代理比">CPP</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th${pc(day, 3, 'pc-top')} title="累计到安装日+3 的净回收 ÷ 花费×1.05">D3 率${provTag(day, 3)}</th><th${pc(day, 7, 'pc-top')} title="累计到安装日+7 的净回收 ÷ 花费×1.05">D7 率${provTag(day, 7)}</th><th>花费</th><th>D0 净</th><th${pc(day, 1, 'pc-top')} title="D0+安装日+1 累计净">D1 净${provTag(day, 1)}</th><th>D0 付费人</th><th>D0 成本/人</th>
           <th class="spark-cell">逐日</th>
         </tr>
       </thead>
@@ -1896,6 +1923,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     b.innerHTML = `
       <h3>核心口径</h3>
       <ul>
+        <li><b>CPP（先看 CPP，再看 D0）</b> = 近3日花费 ÷ 近3日窗口付费人数（后台装日 cohort）。近3日 = 以当前焦点日为末日、含焦点日共 3 个自然日，缺日按 0。付费人数：<b>美线（US）用 D0+D1</b>（同一批安装用户在安装日+0/+1 付过费的 unique 人数，非两天 p0 相加）；<b>韩/日（KR/JP）用 D0</b>。密度带：<b>≤$40 好 / $40–70 边缘 / &gt;$70 或窗内 0 付费且近3日花费 ≥$100 差</b>。绝对愿意支付线，<b>禁止跟代理比 CPP</b>。「D0 成本/人」列仍是单日 花费/D0 付费人，不是 CPP。注：最近几天由实时后端真账覆盖的装日暂无 D1 付费人明细，美线 D0+D1 在这些日子按 D0 下限计，CPP 会偏高。</li>
         <li><b>D0 净回收率</b> = 安装当天净回收 / 当天花费。<b>50% 为正常参考值</b>，任何国家同一标准。</li>
         <li><b>D1 / D3 / D7 / D14</b> = 同一批新增在往后第 1/3/7/14 天的净回收额。</li>
         <li><b>Cohort 累计回收</b> = 那一天的新增，从 D0 到报表日的累计净回收 ÷ 那天的花费。各批观察期不同，越新越低是正常的。</li>
