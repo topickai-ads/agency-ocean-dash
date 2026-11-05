@@ -2097,9 +2097,8 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     }
     $('#who').classList.toggle('is-ag', IS_AG);
 
-    $('#brandSub').textContent = IS_AG
-      ? `安装日口径 · 净回收 D0–D14 · 窗口固定 ${WINDOW_DAYS} 天`
-      : `${PRODUCTS.map(p => p.short).join(' + ')} · 含自投 zt · 安装日口径 · 净回收 D0–D14 · 窗口固定 ${WINDOW_DAYS} 天`;
+    /* 顶栏副文案已撤（产品名/口径说明属废话）；保留空节点以免布局塌 */
+    $('#brandSub').textContent = '';
     $('#benchHint').textContent = `D0 净回收率 ${fmt.pct(BENCH, 0)} = 基准`;
 
     let rz;
