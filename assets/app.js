@@ -1290,9 +1290,28 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       const m = campBudMap[acc] = {};
       for (const d of M.budget_detail[acc] || []) m[d.camp] = (m[d.camp] || 0) + (d.budget || 0);
     }
+    /* 四层预算（Billy t189/t190）：ABO → Campaign = 当天有花费 adset 预算之和、Adset 显示自身预算；
+       CBO → 只到 Campaign，Adset 不显示；Ad 无预算。时间线按变更日志回溯到焦点日 */
+    const BT = M.budget_tree || {};
+    const tlAt = tl => { let v = null; for (const [t, x] of tl || []) if (t == null || t <= day) v = x; return v || null; };
+    const adsetBud = o => {
+      const t = BT[o.acc]; if (!t) return null;
+      const c = (t.c || {})[o.camp]; if (!c || c.k !== 'ABO') return null;
+      return tlAt((t.s || {})[o.camp + SEP + (o.ads || '')]);
+    };
     const budOf = (o, l) => {
       if (l === 'account') return BUD.known ? (BUD.acc[o.acc] || null) : null;
-      if (l === 'campaign') return (campBudMap[o.acc] || {})[o.camp] || null;
+      if (l === 'campaign') {
+        const c = ((BT[o.acc] || {}).c || {})[o.camp];
+        if (c && c.k === 'CBO') return tlAt(c.tl);
+        if (c && c.k === 'ABO') {
+          let v = 0;
+          for (const s2 of kidsOf('adset')) if (s2.acc === o.acc && s2.camp === o.camp && s2.spend > 0) v += adsetBud(s2) || 0;
+          if (v) return v;
+        }
+        return (campBudMap[o.acc] || {})[o.camp] || null;
+      }
+      if (l === 'adset') return adsetBud(o);
       return null;
     };
 
