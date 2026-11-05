@@ -334,7 +334,7 @@
   /* ---------------- 灯 / 色 ---------------- */
 
   const TONE_C = { ok: '#059669', warn: '#eab308', bad: '#dc2626', mute: '#98a2b3' };
-  /* 行首灯 / 红黄绿筛选：近3日 CPP 密度带（Billy）；率列 ratePill 仍按 D0 率上色 */
+  /* 行首灯 / 红黄绿筛选：今日 CPP 密度带（Billy 2026-11-05；近3日作辅）；率列 ratePill 仍按 D0 率上色 */
   const LAMP_TXT = { ok: '好', warn: '边缘', bad: '差', mute: '花费<$100' };
 
   function rateTone(rate) {
@@ -343,9 +343,9 @@
     if (rate >= LIGHT.warn) return 'warn';
     return 'bad';
   }
-  /* ≤$40 绿 · $40–70 黄 · >$70 或（花费≥$100 且 0 付费）红 · 花费<$100 且无付费/很差 → 灰样本不足 */
-  function tone(spend3, payers3) {
-    const sp = spend3 || 0, py = payers3 || 0;
+  /* ≤$40 绿 · $40–70 黄 · >$70 或（花费≥$100 且 0 付费）红 · 花费<$100 且无付费/很差 → 灰样本不足；调用方传今日 spend/pc */
+  function tone(spend, payers) {
+    const sp = spend || 0, py = payers || 0;
     const v = cppOf(sp, py);
     if (v == null) return 'mute';
     if (v === Infinity || py === 0) return sp >= 100 ? 'bad' : 'mute';
@@ -353,11 +353,11 @@
     if (v <= 70) return 'warn';
     return sp >= 100 ? 'bad' : 'mute';
   }
-  function lamp(spend3, payers3, size) {
-    const t = tone(spend3, payers3);
-    const v = cppOf(spend3 || 0, payers3 || 0);
+  function lamp(spend, payers, size) {
+    const t = tone(spend, payers);
+    const v = cppOf(spend || 0, payers || 0);
     const detail = v == null ? '' : v === Infinity ? ' · 无付费' : ' · ' + fmt.money(v);
-    return `<i class="lamp ${t}${size === 'lg' ? ' lg' : ''}" title="${LAMP_TXT[t]}${detail}（近3日 CPP）"></i>`;
+    return `<i class="lamp ${t}${size === 'lg' ? ' lg' : ''}" title="${LAMP_TXT[t]}${detail}（今日 CPP）"></i>`;
   }
   function ratePill(rate, digits = 1) {
     if (rate == null) return '<span class="pill mute">—</span>';
@@ -1240,7 +1240,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       if (l === 'account') return { on: own === 'ACTIVE', tip: (own === 'ACTIVE' ? '开' : '关') + ` · 账户 raw account_status=${m.a}（不级联子层）` + (m.t ? ` · 拉取于 ${m.t}` : '') };
       return { on: own === 'ACTIVE', tip: (own === 'ACTIVE' ? '开' : '关') + ` · ${own}` + (m.t ? ` · 拉取于 ${m.t}` : '') };
     };
-    if (TF) tgt = tgt.filter(o => tone(o.spend3, o.payers3) === TF);
+    if (TF) tgt = tgt.filter(o => tone(o.spend, o.pc) === TF);
     if (state.spendMin) tgt = tgt.filter(o => (o.spend || 0) > state.spendMin);
     if (state.offFilter === 'exclude') tgt = tgt.filter(o => (onOf(o, lv) || {}).on !== false);
     if (!tgt.length) return null;
@@ -1332,7 +1332,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       const strong = rowLv === 'account' || rowLv === 'campaign';
       return `<tr class="lv-${rowLv} d${depth} ${isFocus ? 'is-focus' : ''}" data-lv="${rowLv}" data-key="${encodeURIComponent(key)}" data-node="${encodeURIComponent(o.key)}" data-name="${esc(label)}" data-extra="${esc(extra || '')}">
         <td class="tree-cell" style="padding-left:${10 + Math.min(depth, 3) * 12}px">
-          ${lamp(o.spend3, o.payers3)}${caret}
+          ${lamp(o.spend, o.pc)}${caret}
           <span class="txt${(onOf(o, rowLv) || {}).on === false ? ' is-off' : ''}" title="${esc(label)}${(() => { const s = onOf(o, rowLv); return s ? ' · ' + esc(s.tip) : ''; })()}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>${stBadge(o, rowLv)}
         </td>
         <td>${bsCombo(o.spend, bud, (o.spend3 || 0) < 100)}</td>
@@ -1393,7 +1393,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       const d1 = d1Of(a, day);
       const d0 = okSp(a.spend) ? a.n[0] / (a.spend * FEE) : null;
       return `<tr class="ov-row ${cls}">
-        <td class="tree-cell">${lamp(a.spend3, a.payers3)}<span class="txt"><b>${esc(label)}</b></span></td>
+        <td class="tree-cell">${lamp(a.spend, a.pc)}<span class="txt"><b>${esc(label)}</b></span></td>
         <td>${bsCombo(a.spend, b)}</td>
         <td>${fmt.num(a.p0)}</td><td>${cppToday(a, day)}</td><td>${cpp3d(a, day)}</td>
         <td>${ratePill(d0)}</td><td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td><td><span class="dim">—</span></td></tr>`;
@@ -1438,7 +1438,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     return _tw.measureText(String(t)).width;
   }
 
-  /* 四层明细 D1：同一批安装到安装日+1（北京自然日）的累计净 ÷ 当天花费；行首灯看近3日 CPP */
+  /* 四层明细 D1：同一批安装到安装日+1（北京自然日）的累计净 ÷ 当天花费；行首灯看今日 CPP */
   function d1Of(o, day) {
     if (addDays(day, 1) > REV_UNTIL) {
       const need = dayDiff(REV_UNTIL, addDays(day, 1));
@@ -1523,7 +1523,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     cppTrendArrow(cppOf(o.spend || 0, o.pc || 0), cppOf(o.spend3 || 0, o.payers3 || 0)));
   const cpp3d = (o, day) => cppCell(o.spend3, o.payers3, '近3日 CPP', `${fmt.md(addDays(day, -2))}–${fmt.md(day)}`);
 
-  /* 调整建议（density_kill_rules · UG+Billy 修正版；D0 率不做门槛，不跟代理比） */
+  /* 调整建议（Billy 2026-11-05：今日 CPP 主、近3日辅；D0 率不做门槛，不跟代理比） */
   function bjHour() { return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Shanghai', hour: '2-digit', hour12: false }).format(new Date())) % 24; }
   function campBudgetKind(acc, camp) {
     const det = (M.budget_detail || {})[acc] || [];
@@ -1542,45 +1542,69 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       const tip = bk === 'CBO' ? 'CBO 不套 ABO 加减规则' : '未知预算类型，暂不给建议';
       return `<span class="dim" title="${esc(tip)}">—</span>`;
     }
-    /* Adset：density_kill_rules；Ad：先同组比较（关停、预算挪给主 Ad），再回落 density */
-    const sp = o.spend3 || 0, py = o.payers3 || 0, v = cppOf(sp, py);
-    const nums = `近3日花费 ${fmt.money(sp)} · 近3日 D0 付费人 ${fmt.num(py)} · 近3日 CPP ${v == null ? '—' : v === Infinity ? '无付费' : fmt.money(v)}`;
+    /* Billy 2026-11-05：建议以今日 CPP 为主、近3日作辅；D0 率不做加减停门槛 */
+    const spT = o.spend || 0, pyT = o.pc || 0, vT = cppOf(spT, pyT);
+    const sp3 = o.spend3 || 0, py3 = o.payers3 || 0, v3 = cppOf(sp3, py3);
+    const fmtCpp = v => v == null ? '—' : v === Infinity ? '无付费' : fmt.money(v);
+    const nums = `今日花费 ${fmt.money(spT)} · 今日 D0 付费人 ${fmt.num(pyT)} · 今日 CPP ${fmtCpp(vT)}；近3日花费 ${fmt.money(sp3)} · 近3日 D0 付费人 ${fmt.num(py3)} · 近3日 CPP ${fmtCpp(v3)}`;
     const mk = (txt, tone, why) => {
       const col = { ok: 'color:#15803d;background:#dcfce7', warn: 'color:#a16207;background:#fef9c3', bad: 'color:#b91c1c;background:#fee2e2', hold: 'color:#374151;background:#f3f4f6' }[tone] || 'color:#6b7280';
       return `<span class="adv-badge" style="${col};padding:1px 6px;border-radius:6px;font-weight:600;display:inline-block;line-height:1.25;white-space:normal;text-align:center" title="${esc(why + '｜' + nums)}">${txt}</span>`;
     };
-    if (day === TODAY && bjHour() < 21 && sp >= 100 && py === 0) return mk(sibs && sibs.length ? '关停·挪给同组' : '关停', 'bad', '21:00 前例外：近3日花费 ≥ $100 且近3日 D0 付费人 = 0（不看仅今日 0）');
+    /* 1) 21:00 前：仅保留「近3日花≥$100 且近3日 0 付费 → 关停」例外；其余再观察（不用仅今日 0） */
+    if (day === TODAY && bjHour() < 21 && sp3 >= 100 && py3 === 0) return mk(sibs && sibs.length ? '关停·挪给同组' : '关停', 'bad', '21:00 前例外：近3日花费 ≥ $100 且近3日 D0 付费人 = 0（不看仅今日 0）');
     if (day === TODAY && bjHour() < 21) return mk('再观察', '', '焦点日未到晚间（21:00），暂不给加减/关停建议');
+    /* 2) Ad 同组：主 Ad 强 / 本条差优先看今日 CPP；近3日花费仍判谁在吃预算 */
     if (sibs && sibs.length) {
       const top = sibs.reduce((m, x) => ((x.spend3 || 0) > (m.spend3 || 0) ? x : m), sibs[0]);
-      const ts = top.spend3 || 0, tv = cppOf(ts, top.payers3 || 0);
-      const isMain = sp >= ts;
-      const topStrong = tv != null && tv !== Infinity && tv <= 40 && ts >= 100;
-      const vt = cppOf(o.spend || 0, o.pc || 0);
-      const okToday = vt != null && vt !== Infinity && vt <= 40;
-      const sNote = `同组主 Ad「${top.ad || top.name || '另一条'}」近3日花费 ${fmt.money(ts)}，CPP ${tv == null ? '—' : tv === Infinity ? '无付费' : fmt.money(tv)}`;
+      const ts = top.spend3 || 0;
+      const topVt = cppOf(top.spend || 0, top.pc || 0);
+      const isMain = sp3 >= ts;
+      const topStrong = topVt != null && topVt !== Infinity && topVt <= 40 && ts >= 100;
+      const okToday = vT != null && vT !== Infinity && vT <= 40;
+      const badToday = pyT === 0 || vT === Infinity || (vT != null && vT > 40);
+      const sNote = `同组主 Ad「${top.ad || top.name || '另一条'}」近3日花费 ${fmt.money(ts)}，今日 CPP ${fmtCpp(topVt)}`;
       if (!isMain) {
-        if (okToday && ts >= 100 && sp < ts * 0.2) return mk('预算被吃，关停', 'bad', `今日CPP ≤ $40，但近3日花费不到同组主力的 20%（预算被吃）｜${sNote}`);
-        if (topStrong && v != null && (v === Infinity || v > 40)) return mk('关停·挪给主 Ad', 'bad', `本条近3日 CPP > $40 或无付费，同组主 Ad CPP ≤ $40 且在吃预算｜${sNote}`);
-        if (topStrong && sp < 100) return mk('样本少，关停·挪给主 Ad', 'bad', `本条近3日花费 < $100 难起量，同组主 Ad 表现好｜${sNote}`);
+        if (okToday && ts >= 100 && sp3 < ts * 0.2) return mk('预算被吃，关停', 'bad', `今日CPP ≤ $40，但近3日花费不到同组主力的 20%（预算被吃）｜${sNote}`);
+        if (topStrong && badToday) return mk('关停·挪给主 Ad', 'bad', `本条今日 CPP > $40 或无付费，同组主 Ad 今日 CPP ≤ $40 且在吃预算｜${sNote}`);
+        if (topStrong && sp3 < 100) return mk('样本少，关停·挪给主 Ad', 'bad', `本条近3日花费 < $100 难起量，同组主 Ad 表现好｜${sNote}`);
       }
     }
-    if (sp < 100 && (py === 0 || v === Infinity || v == null || v > 70)) return mk(sibs && sibs.length ? '样本不足' : '样本不足', '', '近3日花费 < $100，样本不足以判断');
-    if (sp >= 100 && (py === 0 || v === Infinity || v > 70)) return mk(sibs && sibs.length ? '关停·挪给同组' : '关停', 'bad', 'R1：近3日花费 ≥ $100 且 0 付费或 CPP > $70');
-    const base = sp / 3, est = '基准=近3日花费÷3（日均，暂无 Adset/Ad 日预算字段）';
+    /* 3) 关停（今日主）：不要因近3日好看而跳过 */
+    if (spT >= 100 && (pyT === 0 || vT === Infinity || vT > 70)) return mk(sibs && sibs.length ? '关停·挪给同组' : '关停', 'bad', 'R1：今日花费 ≥ $100 且今日 0 付费或今日 CPP > $70（不以近3日好看跳过）');
+    /* 4) 样本不足（今日主） */
+    if (spT < 100 && (pyT === 0 || vT === Infinity || vT == null || vT > 70)) return mk('样本不足', '', '今日花费 < $100，样本不足以判断（近3日仅作辅，可看 tip）');
+    const base = sp3 / 3, est = '基准=近3日花费÷3（日均，暂无 Adset/Ad 日预算字段）';
     const chgHtml = (pct) => {
       const from = Math.round(base), to = Math.round(base * (1 + pct / 100));
       const sign = pct > 0 ? '+' : '-';
       return `${from}→${to}（${sign}${Math.abs(pct)}%）`;
     };
-    if (v > 40 && v <= 70) { const pc = v > 55 ? 30 : 20; return mk(chgHtml(-pc), 'warn', `R2：近3日 CPP 在 $40–70（>$55 减30%，否则减20%）；${est}`); }
-    if (py >= 5) {
-      const pc = v <= 30 ? 30 : 20;
-      /* Billy：加预算（+N%）只在 Adset；Ad 层（sibs!=null）不加 */
-      if (sibs != null) return mk('保持', '', `Ad 层不加预算（+${pc}% 只在 Adset）；近3日 CPP ≤ $40 且付费人 ≥ 5（当前 ${py} 人）`);
-      return mk(chgHtml(pc), 'ok', `R3：近3日 CPP ≤ $40 且近3日 D0 付费人 ≥ 5（当前 ${py} 人；CPP ≤$30 加30%，否则加20%；仅 Adset）；${est}`);
+    /* 5) 减预算（今日主）：今日在 $40–70 才减；今日≤40 不因近3日在 40–70 喊减 */
+    if (vT != null && vT !== Infinity && vT > 40 && vT <= 70) {
+      const pc = vT > 55 ? 30 : 20;
+      return mk(chgHtml(-pc), 'warn', `R2：今日 CPP 在 $40–70（>$55 减30%，否则减20%）；${est}`);
     }
-    return mk('保持', '', `R3：近3日 CPP ≤ $40，但付费人 < 5（当前 ${py} 人），暂不写可加`);
+    /* 6) 加预算：今日 CPP>$40（或无付费且有花费）禁止加 —— 上面分支已覆盖；此处仅今日≤40 */
+    const todayOk = vT != null && vT !== Infinity && vT <= 40 && pyT > 0;
+    if (!todayOk) {
+      return mk('保持', '', '今日 CPP 未到可加门槛（需今日 CPP ≤ $40 且有新增付费）；近3日再好看也不加');
+    }
+    const near3Ok = v3 != null && v3 !== Infinity && v3 <= 40;
+    const sampleOk = py3 >= 5;
+    if (near3Ok && sampleOk) {
+      const pc = vT <= 30 ? 30 : 20;
+      if (sibs != null) return mk('保持', '', `Ad 层不加预算（+${pc}% 只在 Adset）；今日 CPP ≤ $40 且近3日亦 ≤ $40、近3日 D0 付费人 ≥ 5（当前近3日 ${py3} 人）`);
+      return mk(chgHtml(pc), 'ok', `R3：今日 CPP ≤ $40 且近3日 CPP ≤ $40、近3日 D0 付费人 ≥ 5（当前 ${py3} 人；今日 CPP ≤$30 加30%，否则加20%；仅 Adset）；${est}`);
+    }
+    /* 今日OK、近3日仍差或样本门：禁止验过猛加 +20/+30；Adset 小加 +10%；Ad 保持/观察再加 */
+    if (sibs != null) {
+      return mk('观察再加', '', `今日 CPP ≤ $40 且有付费，但近3日仍差或样本门（近3日付费人 ${py3}、近3日 CPP ${fmtCpp(v3)}）；Ad 层不加 %`);
+    }
+    if (!sampleOk && near3Ok) {
+      return mk(chgHtml(10), 'hold', `今日OK·近3日样本门挡猛加（近3日 D0 付费人 ${py3} < 5，勿写验过 +20/+30）→小加；${est}`);
+    }
+    return mk(chgHtml(10), 'ok', `今日OK·近3日仍差→小加（+10%；近3日 CPP ${fmtCpp(v3)}，近3日付费人 ${py3}）；${est}`);
   }
   const budTd = b => b ? fmt.money(b) : '<span class="dim">—</span>';
   /* 预算·花费·消耗比例合一列：条 + 比例 + 花费/预算；无预算只显示花费 */
@@ -1595,7 +1619,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
   function drillFootHTML(c) {
     const f1 = d1Of({ spend: c.total.spend, n: [c.total.n1, 0] }, c.day);
     return `<tr>
-        <td class="tree-cell">${lamp(c.total.spend3, c.total.payers3)}<span class="txt">${c.top.length} 条${c.tf ? TF_NAME[c.tf] + '灯' : '在投'}${LV_NAME[c.lv]}</span></td>
+        <td class="tree-cell">${lamp(c.total.spend, c.total.pc)}<span class="txt">${c.top.length} 条${c.tf ? TF_NAME[c.tf] + '灯' : '在投'}${LV_NAME[c.lv]}</span></td>
         <td>${bsCombo(c.total.spend, c.footB)}</td>
         <td class="${(c.total.payers3 || 0) < 5 ? 'dim' : ''}">${fmt.num(c.total.p0)}</td>
         <td>${cppToday(c.total, c.day)}</td>
@@ -1620,7 +1644,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
           <th colspan="7">${fmt.md(day)} 安装 cohort</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>消耗 / 预算${tipI('进度条 + 消耗比例 + 花费/预算。消耗比例 = 花费 ÷ 预算（今天盘中会偏低）。预算：账户 = 当日日预算台账；Campaign = Meta 当前 campaign 预算（仅今天，历史日无）；Adset/Ad 无日预算。无预算时只显示花费。产品行 = 该产品账户预算之和。')}</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较近3日 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。行首灯、红黄绿筛选与关停判断都看本列。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；花费<$100 且无付费/很差 →灰灯（「样本不足」只在调整建议列出现）；不跟代理比。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看近3日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且无付费/很差 灰）。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('仅 ABO 的 Adset/Ad 给建议；CBO 不建议（显示 —）。Account / Campaign / 脚注仍 —。Ad 层先做同组比较：预算分不到 / 成本差于主 Ad / 预算少样本不足而主 Ad 表现好 →关停·挪给主 Ad；Ad 可减/关停，但加预算（+N%）只在 Adset 出。Adset 按 density_kill_rules（近3日 CPP）：焦点日为今天且北京时间未到 21:00：仅当近3日花费≥$100 且近3日 D0 付费人=0 →关停（不看仅今日 0），其余→再观察；花费<$100 且无付费/CPP>$70 →样本不足；花费≥$100 且 0 付费或 CPP>$70 →关停；$40–70 →减 20%（>$55 减 30%）；≤$40 且近3日 D0 付费人≥5 →加 20%（≤$30 加 30%，仅 Adset），否则保持。加减类单行：237→284（+20%）/ 237→166（-30%）（近3日花费÷3 为日均基准）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。D0 率不做门槛，不跟代理比。')}</th></tr>
+          <th>账号 / Campaign / Adset / Ad</th><th>消耗 / 预算${tipI('进度条 + 消耗比例 + 花费/预算。消耗比例 = 花费 ÷ 预算（今天盘中会偏低）。预算：账户 = 当日日预算台账；Campaign = Meta 当前 campaign 预算（仅今天，历史日无）；Adset/Ad 无日预算。无预算时只显示花费。产品行 = 该产品账户预算之和。')}</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较近3日 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。本列只作辅读（防单日偶然好看）；行首灯、红黄绿筛选与调整建议以今日 CPP 为主。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看今日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且无付费/很差 灰）；D0 率不作加减停主门槛。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('仅 ABO 的 Adset/Ad 给建议；CBO 不建议（显示 —）。Account / Campaign / 脚注仍 —。建议与行首灯以今日 CPP 为主、近3日作辅；读数顺序：当日CPP → 近3日CPP → D0率（D0率不作加减停主门槛）。Ad 层先做同组比较（主 Ad 强/本条差看今日 CPP；近3日花费判谁在吃预算）→关停·挪给主 Ad / 预算被吃。Ad 可减/关停，加预算（+N%）只在 Adset。焦点日为今天且北京时间未到 21:00：仅当近3日花费≥$100 且近3日 D0 付费人=0 →关停（不看仅今日 0），其余→再观察。其余：今日花费≥$100 且今日 0 付费或今日 CPP>$70 →关停；今日花费<$100 且无付费/CPP>$70 →样本不足；今日 CPP $40–70 →减 20%（>$55 减 30%；今日≤40 不因近3日边缘喊减）；今日 CPP≤40 且有付费：近3日亦≤40 且近3日 D0 付费人≥5 → Adset 加 20%（≤$30 加 30%），Ad 保持；今日OK、近3日仍差或样本门 → Adset 小加 +10%（今日OK·近3日仍差→小加/观察再加），Ad 观察再加；今日已差则不加（即使近3日好看）。加减类：237→284（+20%）基准=近3日花费÷3。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。不跟代理比。')}</th></tr>
       </thead>
       <tbody id="drillOv" class="ov-body">${c.overview}</tbody>
       <tbody id="drillRows">${c.body}</tbody>
@@ -1641,7 +1665,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     return `<div class="focus">
       <div class="focus-head">
         <span class="tag">${LV_NAME[f.lv]}</span>
-        ${lamp(nd.spend3, nd.payers3, 'lg')}
+        ${lamp(nd.spend, nd.pc, 'lg')}
         <b>${esc(f.name)}</b>
         <button class="btn-ghost" id="focusClose">收起</button>
       </div>
@@ -1741,7 +1765,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     (slot || main).innerHTML = `
       <section class="sect">
         ${sec('01', '四层明细',
-          `账号 → Campaign → Adset → Ad，只列当天在投的 · 日期跟顶部筛选 · 行首灯看近3日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且付费差 灰）`,
+          `账号 → Campaign → Adset → Ad，只列当天在投的 · 日期跟顶部筛选 · 行首灯看今日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且付费差 灰；近3日作辅）`,
           `${fmt.md(day)}${day === TODAY ? ' 盘中' : ''} · 花费 ${fmt.money((() => { let v = 0; for (const r of ALL) if (r.lv === 'campaign' && r.d === day && match(r, {})) v += r.spend; return v; })())}`)}
         <article class="card">
           <div class="drill-ctrl">
@@ -2093,14 +2117,14 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     b.innerHTML = `
       <h3>核心口径</h3>
       <ul>
-        <li><b>CPP（先看 CPP，再看 D0）</b>：面板同时展示 <b>今日 CPP</b> 与 <b>近3日 CPP</b>。今日 = 今日花费 ÷ 今日 D0 付费人数；近3日 = 以焦点日为末日、含焦点日共 3 个自然日花费 ÷ 同窗 D0 付费人数（缺日按 0）。付费人数：<b>全市场一律 D0</b>（p0）。D1/D3/D5/D7 只作回收参考、不进 CPP。CPP 分档两列相同：<b>≤$40 好 / $40–70 边缘 / &gt;$70 或窗内 0 付费且花费 ≥$100 差</b>。<b>关停判断仍以近3日 CPP 为准</b>（口径卡 density_kill_rules）。绝对愿意支付线，<b>禁止跟代理比 CPP</b>。D0 率仍是当天付费金额÷当天花费（不动）。<b>调整建议列</b>仅 ABO 的 Adset/Ad 按 density_kill_rules 近3日 CPP 分带给出关停/减/保持/可加（CBO 显示 —）；今日未到 21:00 一律「再观察」。</li>
+        <li><b>CPP（先看 CPP，再看 D0）</b>：面板同时展示 <b>今日 CPP</b> 与 <b>近3日 CPP</b>。今日 = 今日花费 ÷ 今日 D0 付费人数；近3日 = 以焦点日为末日、含焦点日共 3 个自然日花费 ÷ 同窗 D0 付费人数（缺日按 0）。付费人数：<b>全市场一律 D0</b>（p0）。D1/D3/D5/D7 只作回收参考、不进 CPP。CPP 分档两列相同：<b>≤$40 好 / $40–70 边缘 / &gt;$70 或窗内 0 付费且花费 ≥$100 差</b>。<b>建议与行首灯看今日 CPP，近3日作辅</b>（防单日偶然好看；读数顺序：当日CPP → 近3日CPP → D0率；D0率不作加减停主门槛）。绝对愿意支付线，<b>禁止跟代理比 CPP</b>。D0 率仍是当天付费金额÷当天花费（不动）。<b>调整建议列</b>仅 ABO 的 Adset/Ad：今日主、近3日辅给出关停/减/保持/可加/小加（CBO 显示 —）；今日未到 21:00 仅保留近3日花≥$100且近3日0付费→关停，其余「再观察」。</li>
         <li><b>D0 净回收率</b> = 安装当天净回收 / 当天花费。<b>50% 为正常参考值</b>，任何国家同一标准。</li>
         <li><b>D1 / D3 / D7 / D14</b> = 同一批新增在往后第 1/3/7/14 天的净回收额。</li>
         <li><b>Cohort 累计回收</b> = 那一天的新增，从 D0 到报表日的累计净回收 ÷ 那天的花费。各批观察期不同，越新越低是正常的。</li>
         <li><b>净回收</b> = Google Play ×0.70 + Stripe ×0.70（均按 30% 抽成），剔除内部/测试账号。；回收率分母 = Meta spend ×1.05（含代理服务费 5%）。</li>
         <li><b>单个新增付费用户成本</b> = 花费 / D0 付费人数。只看趋势，不设基线。</li>
-        <li><b>四层明细 / 预算表 D0·D1·D3·D7 率</b> = 同一批安装用户累计到安装日+k（北京自然日，非滚动 24h）的净回收 ÷ 当天花费×1.05（累计率）；未到安装日+k 显示「还 N 天」；安装日+k 当天未结束前整列虚线框住、表头标「未完」，格内照常按临时累计率上色（非正式定论）。行首灯与红黄绿筛选看近3日 CPP；D0/D1/D3 率列 pill 仍按各自回收率上色。</li>
-        <li><b>灯（行首 / 红黄绿筛选）</b>：近3日 CPP ≤$40 绿、$40–70 黄、&gt;$70 或（近3花费≥$100 且 0 付费）红；近3花费&lt;$100 且无付费/很差 → 灰灯。率列 pill 仍按 D0 率上色。</li>
+        <li><b>四层明细 / 预算表 D0·D1·D3·D7 率</b> = 同一批安装用户累计到安装日+k（北京自然日，非滚动 24h）的净回收 ÷ 当天花费×1.05（累计率）；未到安装日+k 显示「还 N 天」；安装日+k 当天未结束前整列虚线框住、表头标「未完」，格内照常按临时累计率上色（非正式定论）。行首灯与红黄绿筛选看今日 CPP（近3日作辅）；D0/D1/D3 率列 pill 仍按各自回收率上色。</li>
+        <li><b>灯（行首 / 红黄绿筛选）</b>：今日 CPP ≤$40 绿、$40–70 黄、&gt;$70 或（今日花费≥$100 且 0 付费）红；今日花费&lt;$100 且无付费/很差 → 灰灯。率列 pill 仍按 D0 率上色。</li>
         <li><b>消耗只看趋势</b>：每日花费是 Meta 实时拉的账单数，不再拿它跟固定预算比；预算只在预算卡里按账户看完成度。</li>
       </ul>
 
