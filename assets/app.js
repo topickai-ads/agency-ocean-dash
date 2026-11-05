@@ -257,18 +257,23 @@
 
   /* ---------------- 分组 / 聚合 ---------------- */
 
+  /* 聚合键优先 Meta id（改名不拆行）；无 id 时回退名字 */
+  function entCamp(r) { return r.cid || r.camp || ''; }
+  function entAds(r) { return r.sid || r.ads || ''; }
+  function entAd(r) { return r.aid || r.ad || ''; }
+
   function keyOf(lv, r) {
     if (lv === 'account') return r.acc;
-    if (lv === 'campaign') return r.acc + '|' + r.camp;
-    if (lv === 'adset') return r.acc + '|' + r.camp + '|' + r.ads;
-    return r.acc + '|' + r.camp + '|' + r.ads + '|' + r.ad;
+    if (lv === 'campaign') return r.acc + '|' + entCamp(r);
+    if (lv === 'adset') return r.acc + '|' + entCamp(r) + '|' + entAds(r);
+    return r.acc + '|' + entCamp(r) + '|' + entAds(r) + '|' + entAd(r);
   }
 
   /* 子层去找父层用：campaign→账号、adset→campaign、ad→adset */
   function parentKey(lv, r) {
     if (lv === 'campaign') return r.acc;
-    if (lv === 'adset') return r.acc + '|' + r.camp;
-    if (lv === 'ad') return r.acc + '|' + r.camp + '|' + r.ads;
+    if (lv === 'adset') return r.acc + '|' + entCamp(r);
+    if (lv === 'ad') return r.acc + '|' + entCamp(r) + '|' + entAds(r);
     return null;
   }
 
@@ -281,8 +286,14 @@
       const k = keyOf(lv, r);
       const a = m.get(k) || {
         key: k, camp: r.camp, ads: r.ads, ad: r.ad, acc: r.acc, ctry: r.ctry,
-        spend: 0, p0: 0, p01: 0, pc: 0, n: new Array(NOFF).fill(0), byDay: new Map()
+        cid: r.cid || '', sid: r.sid || '', aid: r.aid || '',
+        spend: 0, p0: 0, p01: 0, pc: 0, n: new Array(NOFF).fill(0), byDay: new Map(), _d: r.d
       };
+      /* 展示名取日期最新的一条（同 id 改名后看新名） */
+      if (!a._d || r.d >= a._d) {
+        a.camp = r.camp; a.ads = r.ads; a.ad = r.ad; a.ctry = r.ctry; a._d = r.d;
+        if (r.cid) a.cid = r.cid; if (r.sid) a.sid = r.sid; if (r.aid) a.aid = r.aid;
+      }
       a.spend += r.spend; a.p0 += r.p0;
       /* CPP 付费人全市场一律 D0（p0）；可保留 p01 累加供别处参考，pc 绝不走 p01 */
       const p01 = r.p01 != null ? r.p01 : r.p0;
@@ -636,6 +647,7 @@
       if (r.lv !== 'campaign' || r.d !== focus || !match(r, {})) continue;
       spProd[r.p] = (spProd[r.p] || 0) + r.spend;
       spAcc[r.acc] = (spAcc[r.acc] || 0) + r.spend;
+      /* 预算树按展示名（build 已把同 id 折成最新名）；明细 budget_detail 也是名 */
       spCamp[r.acc + '|' + r.camp] = (spCamp[r.acc + '|' + r.camp] || 0) + r.spend;
       addN(nProd, r.p, r.n); addN(nAcc, r.acc, r.n); addN(nCamp, r.acc + '|' + r.camp, r.n);
     }
