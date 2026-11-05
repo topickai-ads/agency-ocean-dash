@@ -1442,13 +1442,13 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       const okToday = vt != null && vt !== Infinity && vt <= 40;
       const sNote = `同组主 Ad「${top.ad || top.name || '另一条'}」近3日花费 ${fmt.money(ts)}，CPP ${tv == null ? '—' : tv === Infinity ? '无付费' : fmt.money(tv)}`;
       if (!isMain) {
-        if (okToday && ts >= 100 && sp < ts * 0.2) return mk('虽然数据好，但预算分不到它，建议关停、把预算挪给主 Ad', 'bad', `今日CPP ≤ $40，但近3日花费不到同组主力的 20%（预算被吃）｜${sNote}`);
-        if (topStrong && v != null && (v === Infinity || v > 40)) return mk('建议关停，预算挪给主 Ad（同组更好素材在吃预算）', 'bad', `本条近3日 CPP > $40 或无付费，同组主 Ad CPP ≤ $40 且在吃预算｜${sNote}`);
-        if (topStrong && sp < 100) return mk('预算少、样本不足，建议关停、把预算挪给主 Ad', 'bad', `本条近3日花费 < $100 难起量，同组主 Ad 表现好｜${sNote}`);
+        if (okToday && ts >= 100 && sp < ts * 0.2) return mk('预算被吃，关停', 'bad', `今日CPP ≤ $40，但近3日花费不到同组主力的 20%（预算被吃）｜${sNote}`);
+        if (topStrong && v != null && (v === Infinity || v > 40)) return mk('关停·挪给主 Ad', 'bad', `本条近3日 CPP > $40 或无付费，同组主 Ad CPP ≤ $40 且在吃预算｜${sNote}`);
+        if (topStrong && sp < 100) return mk('样本少，关停·挪给主 Ad', 'bad', `本条近3日花费 < $100 难起量，同组主 Ad 表现好｜${sNote}`);
       }
     }
-    if (sp < 100 && (py === 0 || v === Infinity || v == null || v > 70)) return mk(sibs && sibs.length ? '样本不足，同组也无更好主 Ad，再跑一天看' : '样本不足', '', '近3日花费 < $100，样本不足以判断');
-    if (sp >= 100 && (py === 0 || v === Infinity || v > 70)) return mk(sibs && sibs.length ? '建议关停，预算挪给同组其它 Ad' : '建议关停', 'bad', 'R1：近3日花费 ≥ $100 且 0 付费或 CPP > $70');
+    if (sp < 100 && (py === 0 || v === Infinity || v == null || v > 70)) return mk(sibs && sibs.length ? '样本不足' : '样本不足', '', '近3日花费 < $100，样本不足以判断');
+    if (sp >= 100 && (py === 0 || v === Infinity || v > 70)) return mk(sibs && sibs.length ? '关停·挪给同组' : '建议关停', 'bad', 'R1：近3日花费 ≥ $100 且 0 付费或 CPP > $70');
     if (v > 40 && v <= 70) return mk('建议减预算', 'warn', 'R2：近3日 CPP 在 $40–70');
     if (py >= 5) return mk('可考虑加预算', 'ok', `R3：近3日 CPP ≤ $40，近3日 D0 付费人 ≥ 5（当前 ${py} 人）`);
     return mk('保持', 'hold', `R3：近3日 CPP ≤ $40，但付费人 < 5（当前 ${py} 人），暂不写可加`);
