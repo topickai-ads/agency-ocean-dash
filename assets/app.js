@@ -284,9 +284,9 @@
         spend: 0, p0: 0, p01: 0, pc: 0, n: new Array(NOFF).fill(0), byDay: new Map()
       };
       a.spend += r.spend; a.p0 += r.p0;
-      /* CPP 付费人全市场一律 D0（p0）；可保留 p01 累加供别处参考，pc 绝不走 p01 */
+      /* CPP 付费人口径：美线 D0+D1 unique（p01），韩/日等 D0（p0）；按行 ctry 取，混合节点逐行加总 */
       const p01 = r.p01 != null ? r.p01 : r.p0;
-      a.p01 += p01; a.pc += r.p0;
+      a.p01 += p01; a.pc += (r.ctry === 'US' ? p01 : r.p0);
       for (let i = 0; i < NOFF; i++) a.n[i] += r.n[i] || 0;
       const dd = a.byDay.get(r.d) || { spend: 0, p0: 0, p01: 0, n0: 0 };
       dd.spend += r.spend; dd.p0 += r.p0; dd.p01 += p01; dd.n0 += r.n[0] || 0;
@@ -1374,7 +1374,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
   /* 表头带圈 i：桌面 hover / 可聚焦；原生 title 手机长按也常能出 */
   const tipI = (txt) => `<i class="tip-i" title="${esc(txt)}" tabindex="0" aria-label="说明">i</i>`;
 
-  /* CPP = 花费 ÷ 窗口付费人（装日 cohort；全市场一律 D0）。
+  /* CPP = 近3日花费 ÷ 近3日窗口付费人（装日 cohort；美 D0+D1 unique / 韩日 D0）。
      密度带（绝对线，禁止跟代理比）：≤$40 好 / $40–70 边缘 / >$70 或窗内 0 付费且花够($100) 差 */
   function cppOf(spend3, payers3) {
     if (payers3 > 0) return spend3 / payers3;
@@ -1383,7 +1383,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
   function cppCell(spend, payers, label, rangeTxt) {
     const v = cppOf(spend || 0, payers || 0);
     if (v == null) return '<span class="dim">—</span>';
-    const tip = `${label}（${rangeTxt}）= 花费 ${fmt.money(spend)} ÷ 窗口付费人 ${fmt.num(payers)}（全市场一律 D0）。≤$40 好 · $40–70 边缘 · >$70 或 0 付费差；不跟代理比。关停仍以近3日为准`;
+    const tip = `${label}（${rangeTxt}）= 花费 ${fmt.money(spend)} ÷ 窗口付费人 ${fmt.num(payers)}（美D0+D1/韩日D0）。≤$40 好 · $40–70 边缘 · >$70 或 0 付费差；不跟代理比。关停仍以近3日为准`;
     let tone, txt;
     if (v === Infinity) { tone = spend >= 100 ? 'bad' : ''; txt = '无付费'; }
     else { tone = v <= 40 ? 'ok' : v <= 70 ? 'warn' : 'bad'; txt = fmt.money(v); }
@@ -1427,7 +1427,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
           <th>近 ${win.length} 天 D0 净</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。灯与红黄绿筛选只看本列。')}</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。关停判断看本列。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th${pc(day, 3, 'pc-top')} title="累计到安装日+3 的净回收 ÷ 花费×1.05">D3 率${provTag(day, 3)}</th><th${pc(day, 7, 'pc-top')} title="累计到安装日+7 的净回收 ÷ 花费×1.05">D7 率${provTag(day, 7)}</th><th>花费</th><th>D0 净</th><th${pc(day, 1, 'pc-top')} title="D0+安装日+1 累计净">D1 净${provTag(day, 1)}</th><th>D0 付费人</th><th>D0 成本/人</th>
+          <th>账号 / Campaign / Adset / Ad</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。灯与红黄绿筛选只看本列。')}</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天窗口付费人（美线 D0+D1 unique / 韩日 D0）。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日窗口付费人（焦点日为末日含当日共 3 天；美 D0+D1 / 韩日 D0）。关停判断看本列。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th${pc(day, 3, 'pc-top')} title="累计到安装日+3 的净回收 ÷ 花费×1.05">D3 率${provTag(day, 3)}</th><th${pc(day, 7, 'pc-top')} title="累计到安装日+7 的净回收 ÷ 花费×1.05">D7 率${provTag(day, 7)}</th><th>花费</th><th>D0 净</th><th${pc(day, 1, 'pc-top')} title="D0+安装日+1 累计净">D1 净${provTag(day, 1)}</th><th>D0 付费人</th><th>D0 成本/人</th>
           <th class="spark-cell">逐日</th>
         </tr>
       </thead>
@@ -1930,7 +1930,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     b.innerHTML = `
       <h3>核心口径</h3>
       <ul>
-        <li><b>CPP（先看 CPP，再看 D0）</b>：面板同时展示 <b>今日 CPP</b> 与 <b>近3日 CPP</b>。今日 = 今日花费 ÷ 今日 D0 付费人数；近3日 = 以焦点日为末日、含焦点日共 3 个自然日花费 ÷ 同窗 D0 付费人数（缺日按 0）。付费人数：<b>全市场一律 D0</b>（p0）。D1/D3/D5/D7 只作回收参考、不进 CPP。密度带两列相同：<b>≤$40 好 / $40–70 边缘 / &gt;$70 或窗内 0 付费且花费 ≥$100 差</b>。<b>关停判断仍以近3日 CPP 为准</b>（口径卡 density_kill_rules）。绝对愿意支付线，<b>禁止跟代理比 CPP</b>。「D0 成本/人」列仍是单日 花费/D0 付费人，不是 CPP。D0 率仍是当天付费金额÷当天花费（不动）。</li>
+        <li><b>CPP（先看 CPP，再看 D0）</b>：面板同时展示 <b>今日 CPP</b> 与 <b>近3日 CPP</b>。今日 = 焦点日当天花费 ÷ 当天窗口付费人；近3日 = 以焦点日为末日、含焦点日共 3 个自然日花费 ÷ 同窗付费人（缺日按 0）。付费人数：<b>美线（US）用 D0+D1</b>（同一批安装用户在安装日+0/+1 付过费的 unique 人数，非两天 p0 相加）；<b>韩/日（KR/JP）用 D0</b>。密度带两列相同：<b>≤$40 好 / $40–70 边缘 / &gt;$70 或窗内 0 付费且花费 ≥$100 差</b>。<b>关停判断仍以近3日 CPP 为准</b>（口径卡 density_kill_rules）。绝对愿意支付线，<b>禁止跟代理比 CPP</b>。「D0 成本/人」列仍是单日 花费/D0 付费人，不是 CPP。注：最近几天由实时后端真账覆盖的装日若 D1 未完，美线 D0+D1 按已有数据计，今日/近3日 CPP 会偏高。</li>
         <li><b>D0 净回收率</b> = 安装当天净回收 / 当天花费。<b>50% 为正常参考值</b>，任何国家同一标准。</li>
         <li><b>D1 / D3 / D7 / D14</b> = 同一批新增在往后第 1/3/7/14 天的净回收额。</li>
         <li><b>Cohort 累计回收</b> = 那一天的新增，从 D0 到报表日的累计净回收 ÷ 那天的花费。各批观察期不同，越新越低是正常的。</li>
