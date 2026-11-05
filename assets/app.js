@@ -1432,22 +1432,30 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     if (BUD.known) for (const n in BUD.acc) { const p = (acctMeta(n) || {}).product; if (p) prodBud[p] = (prodBud[p] || 0) + (BUD.acc[n] || 0); }
     for (const pid in prodBud) if (!prodSum[pid] && prodBud[pid]) prodSum[pid] = Object.assign(z(), { pid });
     const prodRows = Object.values(prodSum).filter(a => a.spend > 0 || prodBud[a.pid]).sort((x, y) => y.spend - x.spend);
-    /* 产品行调整建议：汇总下级有金额的建议（ABO Adset ±% / CBO Campaign ±% / 有预算关停 −当前）净日预算变化 */
+    /* 产品行调整建议：只计「拥有日预算的那一层」净变化
+       ABO → 只取 Adset 的 xx→yy / 关停(−当前)；Campaign「—」、Ad 关停不计
+       CBO → 只取 Campaign 的 xx→yy / 关停(−当前)；Adset/Ad 关停不计（Campaign 日预算不变）
+       同一预算单元只计一次，绝不把 Ad 或错误层叠进净和 */
     const sumProdAdviceDelta = (accList) => {
       let net = 0, n = 0;
       const visit = (o, l, sibs) => {
         if (l === 'campaign' || l === 'adset') {
-          const bud = budOf(o, l);
-          const html = adviceCell(o, day, {
-            isAd: false,
-            isCamp: l === 'campaign',
-            sibs: (sibs || []).filter(x => x !== o),
-            bud,
-            status: onOf(o, l),
-            adsOf: aset => kidsOf('ad').filter(r => r.acc === aset.acc && r.camp === aset.camp && (r.ads || '') === (aset.ads || ''))
-          });
-          const m = /data-delta="(-?\d+)"/.exec(html);
-          if (m) { net += +m[1]; n++; }
+          const bk = campBudgetKind(o.acc, o.camp);
+          /* 显式四层过滤：ABO 只在 adset；CBO 只在 campaign；未知/错层跳过 */
+          const take = (bk === 'ABO' && l === 'adset') || (bk === 'CBO' && l === 'campaign');
+          if (take) {
+            const bud = budOf(o, l);
+            const html = adviceCell(o, day, {
+              isAd: false,
+              isCamp: l === 'campaign',
+              sibs: (sibs || []).filter(x => x !== o),
+              bud,
+              status: onOf(o, l),
+              adsOf: aset => kidsOf('ad').filter(r => r.acc === aset.acc && r.camp === aset.camp && (r.ads || '') === (aset.ads || ''))
+            });
+            const m = /data-delta="(-?\d+)"/.exec(html);
+            if (m) { net += +m[1]; n++; }
+          }
         }
         if (l === 'account' || l === 'campaign') {
           const kids = kidsOfRow(o, l);
@@ -1459,7 +1467,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     };
     const prodAdviceCell = (accList) => {
       const { net, n } = sumProdAdviceDelta(accList);
-      const tip = '假设下级建议全部执行后的日预算合计变化（ABO Adset / CBO Campaign 的 xx→yy，及有日预算的关停按 −当前预算）';
+      const tip = '假设都照做后的日预算净变化：只计 ABO Adset + CBO Campaign 的 xx→yy 与关停（−当前日预算）。Ad 关停、CBO Adset 关停不动日预算，不计入；ABO Campaign 无独立日预算，不计入。加减关停不能按条数或绝对值相加，要按拥有日预算的那一层净合计。';
       const badge = (txt, tone) => {
         const col = { ok: 'color:#15803d;background:#dcfce7', warn: 'color:#a16207;background:#fef9c3', hold: 'color:#6b7280;background:#f3f4f6' }[tone] || 'color:#6b7280';
         return `<span class="adv-badge" style="${col};padding:1px 6px;border-radius:6px;font-weight:600;display:inline-block;line-height:1.25;white-space:normal;text-align:center" title="${esc(tip)}">${txt}</span>`;
