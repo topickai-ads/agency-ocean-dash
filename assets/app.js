@@ -1400,16 +1400,28 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     if (payers3 > 0) return spend3 / payers3;
     return spend3 > 0 ? Infinity : null;
   }
-  function cppCell(spend, payers, label, rangeTxt) {
+  function cppCell(spend, payers, label, rangeTxt, arrowHtml) {
     const v = cppOf(spend || 0, payers || 0);
     if (v == null) return '<span class="dim">—</span>';
     const tip = `${label}（${rangeTxt}）= 花费 ${fmt.money(spend)} ÷ 窗口付费人 ${fmt.num(payers)}（全市场一律 D0）。色带同灯：≤$40 绿 · $40–70 黄 · >$70 或花≥$100且0付费 红 · 花<$100且付费差 灰；不跟代理比`;
     const t = tone(spend, payers); /* 与行首灯同一口径 */
     const txt = v === Infinity ? '无付费' : fmt.money(v);
     const col = { ok: 'color:#15803d;background:#dcfce7', warn: 'color:#a16207;background:#fef9c3', bad: 'color:#b91c1c;background:#fee2e2', mute: 'color:#6b7280;background:#f3f4f6' }[t] || 'color:#6b7280;background:#f3f4f6';
-    return `<span class="cpp-band" style="${col};padding:1px 6px;border-radius:6px;font-weight:600;white-space:nowrap" title="${esc(tip)}">${txt}</span>`;
+    return `<span class="cpp-band" style="${col};padding:1px 6px;border-radius:6px;font-weight:600;white-space:nowrap" title="${esc(tip)}">${txt}${arrowHtml || ''}</span>`;
   }
-  const cppToday = (o, day) => cppCell(o.spend, o.pc, '今日 CPP', fmt.md(day));
+  /* 今日 CPP 右侧趋势：较近3日 CPP；涨=红↑（成本升）· 跌=绿↓（成本降）· 持平不显示 */
+  function cppTrendArrow(todayV, baseV) {
+    if (todayV == null || baseV == null) return '';
+    if (todayV === Infinity && baseV === Infinity) return '';
+    if (todayV === Infinity) return '<span class="cpp-arr up" title="较近3日上升">↑</span>';
+    if (baseV === Infinity) return '<span class="cpp-arr dn" title="较近3日下降">↓</span>';
+    const a = Math.round(todayV), b = Math.round(baseV);
+    if (a > b) return '<span class="cpp-arr up" title="较近3日上升">↑</span>';
+    if (a < b) return '<span class="cpp-arr dn" title="较近3日下降">↓</span>';
+    return '';
+  }
+  const cppToday = (o, day) => cppCell(o.spend, o.pc, '今日 CPP', fmt.md(day),
+    cppTrendArrow(cppOf(o.spend || 0, o.pc || 0), cppOf(o.spend3 || 0, o.payers3 || 0)));
   const cpp3d = (o, day) => cppCell(o.spend3, o.payers3, '近3日 CPP', `${fmt.md(addDays(day, -2))}–${fmt.md(day)}`);
 
   /* 调整建议（density_kill_rules · UG+Billy 修正版；D0 率不做门槛，不跟代理比） */
@@ -1459,8 +1471,8 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     const base = sp / 3, est = '基准=近3日花费÷3（日均，暂无 Adset/Ad 日预算字段）';
     const chgHtml = (pct) => {
       const from = Math.round(base), to = Math.round(base * (1 + pct / 100));
-      const sign = pct > 0 ? '+' : '−';
-      return `${sign}${Math.abs(pct)}%<br>${from}→${to}`;
+      const sign = pct > 0 ? '+' : '-';
+      return `${from}→${to}（${sign}${Math.abs(pct)}%）`;
     };
     if (v > 40 && v <= 70) { const pc = v > 55 ? 30 : 20; return mk(chgHtml(-pc), 'warn', `R2：近3日 CPP 在 $40–70（>$55 减30%，否则减20%）；${est}`); }
     if (py >= 5) {
@@ -1499,7 +1511,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
           <th colspan="7">${fmt.md(day)} 安装 cohort</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>花费</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。行首灯、红黄绿筛选与关停判断都看本列。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；花费<$100 且无付费/很差 →灰灯（「样本不足」只在调整建议列出现）；不跟代理比。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看近3日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且无付费/很差 灰）。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('仅 ABO 的 Adset/Ad 给建议；CBO 不建议（显示 —）。Account / Campaign / 脚注仍 —。Ad 层先做同组比较：预算分不到 / 成本差于主 Ad / 预算少样本不足而主 Ad 表现好 →关停·挪给主 Ad；Ad 可减/关停，但加预算（+N%）只在 Adset 出。Adset 按 density_kill_rules（近3日 CPP）：焦点日为今天且北京时间未到 21:00：仅当近3日花费≥$100 且近3日 D0 付费人=0 →关停（不看仅今日 0），其余→再观察；花费<$100 且无付费/CPP>$70 →样本不足；花费≥$100 且 0 付费或 CPP>$70 →关停；$40–70 →减 20%（>$55 减 30%）；≤$40 且近3日 D0 付费人≥5 →加 20%（≤$30 加 30%，仅 Adset），否则保持。加减类两行：+20% / −30%，下行整数美元 237→284（近3日花费÷3 为日均基准）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。D0 率不做门槛，不跟代理比。')}</th></tr>
+          <th>账号 / Campaign / Adset / Ad</th><th>花费</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较近3日 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。行首灯、红黄绿筛选与关停判断都看本列。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；花费<$100 且无付费/很差 →灰灯（「样本不足」只在调整建议列出现）；不跟代理比。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看近3日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且无付费/很差 灰）。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('仅 ABO 的 Adset/Ad 给建议；CBO 不建议（显示 —）。Account / Campaign / 脚注仍 —。Ad 层先做同组比较：预算分不到 / 成本差于主 Ad / 预算少样本不足而主 Ad 表现好 →关停·挪给主 Ad；Ad 可减/关停，但加预算（+N%）只在 Adset 出。Adset 按 density_kill_rules（近3日 CPP）：焦点日为今天且北京时间未到 21:00：仅当近3日花费≥$100 且近3日 D0 付费人=0 →关停（不看仅今日 0），其余→再观察；花费<$100 且无付费/CPP>$70 →样本不足；花费≥$100 且 0 付费或 CPP>$70 →关停；$40–70 →减 20%（>$55 减 30%）；≤$40 且近3日 D0 付费人≥5 →加 20%（≤$30 加 30%，仅 Adset），否则保持。加减类单行：237→284（+20%）/ 237→166（-30%）（近3日花费÷3 为日均基准）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。D0 率不做门槛，不跟代理比。')}</th></tr>
       </thead>
       <tbody id="drillRows">${c.body}</tbody>
       <tfoot id="drillFoot">${drillFootHTML(c)}</tfoot>

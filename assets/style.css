@@ -1006,6 +1006,11 @@ table.d.drill-t col.c-name { width: auto; }
 table.d.drill-t col.c-spend { width: 96px; }
 table.d.drill-t col.c-d0 { width: 96px; }
 table.d.drill-t col.c-adv { width: 170px; }
+/* 今日 CPP 趋势箭头：涨红↑ / 跌绿↓ */
+.cpp-band .cpp-arr { margin-left: 2px; font-size: .92em; font-weight: 700; }
+.cpp-band .cpp-arr.up { color: #b91c1c; }
+.cpp-band .cpp-arr.dn { color: #15803d; }
+
 /* 调整建议：可换行；数值色在 JS（花费/付费人 dim；CPP 同灯色带） */
 table.d.drill-t td:has(.adv-badge) { white-space: normal; vertical-align: middle; }
 table.d.drill-t .adv-badge { white-space: normal !important; display: inline-block; line-height: 1.25; text-align: center; }
