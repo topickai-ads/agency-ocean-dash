@@ -1283,6 +1283,19 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       return o.ads || '';
     };
 
+    /* 预算：账户 = 台账当日值；Campaign = budget_detail（Meta 当前配置，仅今天）；Adset/Ad 无日预算字段 → — */
+    const BUD = budgetAt(day);
+    const campBudMap = {};
+    if (day === TODAY) for (const acc in (M.budget_detail || {})) {
+      const m = campBudMap[acc] = {};
+      for (const d of M.budget_detail[acc] || []) m[d.camp] = (m[d.camp] || 0) + (d.budget || 0);
+    }
+    const budOf = (o, l) => {
+      if (l === 'account') return BUD.known ? (BUD.acc[o.acc] || null) : null;
+      if (l === 'campaign') return (campBudMap[o.acc] || {})[o.camp] || null;
+      return null;
+    };
+
     /* Meta 开/关：最近一次 pull 的 effective_status（meta.status），级联——上级关则下级显示关；无数据=不显示 */
     const stBadge = (o, l) => {
       const s = onOf(o, l);
@@ -1291,6 +1304,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
     const rowHTML = (o, rowLv, label, extra, hasChild, key, depth, sibs) => {
       const d1 = d1Of(o, day);
+      const bud = budOf(o, rowLv);
 
       const caret = hasChild
         ? `<button class="caret ${state.open.has(key) ? 'open' : ''}" data-k="${encodeURIComponent(key)}" aria-label="展开"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
@@ -1302,7 +1316,9 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
           ${lamp(o.spend3, o.payers3)}${caret}
           <span class="txt${(onOf(o, rowLv) || {}).on === false ? ' is-off' : ''}" title="${esc(label)}${(() => { const s = onOf(o, rowLv); return s ? ' · ' + esc(s.tip) : ''; })()}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>${stBadge(o, rowLv)}
         </td>
+        <td>${budTd(bud)}</td>
         <td class="${(o.spend3 || 0) < 100 ? 'dim' : ''}">${fmt.money(o.spend)}</td>
+        <td>${ratioTd(o.spend, bud)}</td>
         <td class="${(o.payers3 || 0) < 5 ? 'dim' : ''}">${fmt.num(o.p0)}</td>
         <td>${cppToday(o, day)}</td>
         <td>${cpp3d(o, day)}</td>
@@ -1342,8 +1358,38 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       return a;
     }, { spend: 0, p0: 0, pc: 0, n0: 0, n1: 0, spend3: 0, payers3: 0, n: new Array(NOFF).fill(0) });
 
+    /* 分产品总览：按账户归属产品汇总（不受红黄绿/花费/暂停筛选影响） */
+    const z = () => ({ spend: 0, p0: 0, pc: 0, spend3: 0, payers3: 0, n: new Array(NOFF).fill(0) });
+    const addTo = (a, o) => { a.spend += o.spend || 0; a.p0 += o.p0 || 0; a.pc += o.pc || 0; a.spend3 += o.spend3 || 0; a.payers3 += o.payers3 || 0; for (let i = 0; i < NOFF; i++) a.n[i] += o.n[i] || 0; return a; };
+    const accP = {};
+    for (const r of ALL) if (r.d === day && r.acc && r.p && !accP[r.acc]) accP[r.acc] = r.p;
+    const prodSum = {};
+    for (const o of kidsOf('account')) {
+      const pid = (acctMeta(o.acc) || {}).product || accP[o.acc] || '其他';
+      addTo(prodSum[pid] || (prodSum[pid] = Object.assign(z(), { pid })), o);
+    }
+    const prodBud = {};
+    if (BUD.known) for (const n in BUD.acc) { const p = (acctMeta(n) || {}).product; if (p) prodBud[p] = (prodBud[p] || 0) + (BUD.acc[n] || 0); }
+    for (const pid in prodBud) if (!prodSum[pid] && prodBud[pid]) prodSum[pid] = Object.assign(z(), { pid });
+    const prodRows = Object.values(prodSum).filter(a => a.spend > 0 || prodBud[a.pid]).sort((x, y) => y.spend - x.spend);
+    const ovRow = (a, label, b, cls) => {
+      const d1 = d1Of(a, day);
+      const d0 = okSp(a.spend) ? a.n[0] / (a.spend * FEE) : null;
+      return `<tr class="ov-row ${cls}">
+        <td class="tree-cell">${lamp(a.spend3, a.payers3)}<span class="txt"><b>${esc(label)}</b></span></td>
+        <td>${budTd(b)}</td><td><b>${fmt.money(a.spend)}</b></td><td>${ratioTd(a.spend, b)}</td>
+        <td>${fmt.num(a.p0)}</td><td>${cppToday(a, day)}</td><td>${cpp3d(a, day)}</td>
+        <td>${ratePill(d0)}</td><td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td><td><span class="dim">—</span></td></tr>`;
+    };
+    const ovAll = prodRows.reduce(addTo, z());
+    const ovAllB = BUD.known ? (prodRows.reduce((t, a) => t + (prodBud[a.pid] || 0), 0) || null) : null;
+    const overview = prodRows.map(a => ovRow(a, (PRODUCTS.find(x => x.id === a.pid) || {}).short || a.pid, BUD.known ? (prodBud[a.pid] || null) : null, '')).join('')
+      + (prodRows.length > 1 ? ovRow(ovAll, '全部产品', ovAllB, 'ov-all') : '');
+    let footB = null;
+    for (const o of tgt) { const v = budOf(o, lv); if (v) footB = (footB || 0) + v; }
+
     return {
-      lv, top: tgt, tf: TF, day,
+      lv, top: tgt, tf: TF, day, overview, footB,
       nameW: Math.ceil(measureAll('account', top, 0)),
       body: renderRows('account', top, 0),
       total,
@@ -1483,11 +1529,15 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     }
     return mk('保持', '', `R3：近3日 CPP ≤ $40，但付费人 < 5（当前 ${py} 人），暂不写可加`);
   }
+  const budTd = b => b ? fmt.money(b) : '<span class="dim">—</span>';
+  const ratioTd = (sp, b) => b ? `<b>${fmt.pct((sp || 0) / b, 0)}</b>` : '<span class="dim">—</span>';
   function drillFootHTML(c) {
     const f1 = d1Of({ spend: c.total.spend, n: [c.total.n1, 0] }, c.day);
     return `<tr>
         <td class="tree-cell">${lamp(c.total.spend3, c.total.payers3)}<span class="txt">${c.top.length} 条${c.tf ? TF_NAME[c.tf] + '灯' : '在投'}${LV_NAME[c.lv]}</span></td>
+        <td>${budTd(c.footB)}</td>
         <td class="${(c.total.spend3 || 0) < 100 ? 'dim' : ''}">${fmt.money(c.total.spend)}</td>
+        <td>${ratioTd(c.total.spend, c.footB)}</td>
         <td class="${(c.total.payers3 || 0) < 5 ? 'dim' : ''}">${fmt.num(c.total.p0)}</td>
         <td>${cppToday(c.total, c.day)}</td>
         <td>${cpp3d(c.total, c.day)}</td>
@@ -1503,16 +1553,17 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
     return `<div class="table-wrap"><table class="d drill-t" style="--name-col-w:${c.nameW}px">
       <colgroup>
-        <col class="c-name"><col class="c-spend"><col class="c-payers"><col class="c-cpp"><col class="c-cpp"><col class="c-rate"><col class="c-rate1"><col class="c-adv">
+        <col class="c-name"><col class="c-spend"><col class="c-spend"><col class="c-ratio"><col class="c-payers"><col class="c-cpp"><col class="c-cpp"><col class="c-rate"><col class="c-rate1"><col class="c-adv">
       </colgroup>
       <thead>
         <tr class="grp">
           <th>名称</th>
-          <th colspan="7">${fmt.md(day)} 安装 cohort</th>
+          <th colspan="9">${fmt.md(day)} 安装 cohort</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>花费</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较近3日 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。行首灯、红黄绿筛选与关停判断都看本列。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；花费<$100 且无付费/很差 →灰灯（「样本不足」只在调整建议列出现）；不跟代理比。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看近3日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且无付费/很差 灰）。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('仅 ABO 的 Adset/Ad 给建议；CBO 不建议（显示 —）。Account / Campaign / 脚注仍 —。Ad 层先做同组比较：预算分不到 / 成本差于主 Ad / 预算少样本不足而主 Ad 表现好 →关停·挪给主 Ad；Ad 可减/关停，但加预算（+N%）只在 Adset 出。Adset 按 density_kill_rules（近3日 CPP）：焦点日为今天且北京时间未到 21:00：仅当近3日花费≥$100 且近3日 D0 付费人=0 →关停（不看仅今日 0），其余→再观察；花费<$100 且无付费/CPP>$70 →样本不足；花费≥$100 且 0 付费或 CPP>$70 →关停；$40–70 →减 20%（>$55 减 30%）；≤$40 且近3日 D0 付费人≥5 →加 20%（≤$30 加 30%，仅 Adset），否则保持。加减类单行：237→284（+20%）/ 237→166（-30%）（近3日花费÷3 为日均基准）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。D0 率不做门槛，不跟代理比。')}</th></tr>
+          <th>账号 / Campaign / Adset / Ad</th><th>预算${tipI('账户 = 当日日预算台账（Meta ACTIVE 预算回写/变更日志回溯）；Campaign = Meta 当前 campaign 预算（budget_detail，仅今天有，历史日 —）；Adset/Ad 无日预算 → —。产品总览 = 该产品账户预算之和。')}</th><th>花费</th><th>消耗比例${tipI('消耗比例 = 花费 ÷ 预算；无预算显示 —。今天盘中会偏低。')}</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较近3日 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。行首灯、红黄绿筛选与关停判断都看本列。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；花费<$100 且无付费/很差 →灰灯（「样本不足」只在调整建议列出现）；不跟代理比。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看近3日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且无付费/很差 灰）。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('仅 ABO 的 Adset/Ad 给建议；CBO 不建议（显示 —）。Account / Campaign / 脚注仍 —。Ad 层先做同组比较：预算分不到 / 成本差于主 Ad / 预算少样本不足而主 Ad 表现好 →关停·挪给主 Ad；Ad 可减/关停，但加预算（+N%）只在 Adset 出。Adset 按 density_kill_rules（近3日 CPP）：焦点日为今天且北京时间未到 21:00：仅当近3日花费≥$100 且近3日 D0 付费人=0 →关停（不看仅今日 0），其余→再观察；花费<$100 且无付费/CPP>$70 →样本不足；花费≥$100 且 0 付费或 CPP>$70 →关停；$40–70 →减 20%（>$55 减 30%）；≤$40 且近3日 D0 付费人≥5 →加 20%（≤$30 加 30%，仅 Adset），否则保持。加减类单行：237→284（+20%）/ 237→166（-30%）（近3日花费÷3 为日均基准）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。D0 率不做门槛，不跟代理比。')}</th></tr>
       </thead>
+      <tbody id="drillOv" class="ov-body">${c.overview}</tbody>
       <tbody id="drillRows">${c.body}</tbody>
       <tfoot id="drillFoot">${drillFootHTML(c)}</tfoot>
     </table></div><div id="focusSlot">${focusHTML(win)}</div>`;
@@ -1565,6 +1616,8 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     }
     /* 先把新行拼好再一次替换，避免空档 */
     tb.innerHTML = c.body;
+    const ov = document.getElementById('drillOv');
+    if (ov) ov.innerHTML = c.overview;
     const tf = document.getElementById('drillFoot');
     if (tf) tf.innerHTML = drillFootHTML(c);
     const slot = document.getElementById('focusSlot');
@@ -1605,12 +1658,11 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     main.innerHTML = state.tab === 'recovery' ? recHTML : `
       <section class="sect">
         ${sec('01', '预算 · 消耗 · 回收率',
-          `左表：产品 → 账户 → campaign 逐层展开${IS_AG ? '' : ' · 含自投 zt'} · 右图：每日花费走势`,
+          `每日花费走势${IS_AG ? '' : ' · 含自投 zt'} · 预算 / 消耗比例已并入下方四层明细（顶部为分产品总览）`,
           budFocus
             ? `<b>${fmt.money(cur.spendA)}</b> / ${fmt.money(budFocus)} · 消耗比例 ${fmt.pct(usedNow, 0)}`
             : `<b>${fmt.money(cur.spendA)}</b> 已花 · 当日预算未记账`)}
-        <div class="row-bs">
-          ${budgetSpendCard(wd, focus, cur, focusIdx)}
+        <div class="row-bs one">
           ${spendTrendCard(wd, focusIdx, cur)}
         </div>
       </section>

@@ -1234,3 +1234,12 @@ html, body { line-height: 1.55; }
   cursor: help; user-select: none;
 }
 .tip-i:hover, .tip-i:focus { border-color: #2563eb; color: #2563eb; outline: none; background: #eff6ff; }
+
+/* 预算表并入四层明细：走势卡独占一行；顶部分产品总览 */
+.row-bs.one { grid-template-columns: minmax(0, 1fr); }
+table.d.drill-t col.c-ratio { width: 80px; }
+table.d.drill-t tbody.ov-body tr.ov-row td { background: #f6f8fc; }
+table.d.drill-t tbody.ov-body tr.ov-all td { background: #eef2f9; }
+table.d.drill-t tbody.ov-body tr:last-child td { border-bottom: 2px solid #c9d2e3; }
+table.d.drill-t { min-width: 1240px; }
+@media (max-width: 860px) { table.d.drill-t { min-width: 960px; } table.d.drill-t col.c-ratio { width: 66px; } }
