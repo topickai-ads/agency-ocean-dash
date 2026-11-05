@@ -1184,13 +1184,14 @@ body.is-pulling .top, body.is-pulling main, body.is-pulling .foot {
   pointer-events: none; user-select: none;
 }
 table.d td.tree-cell > .txt { font-size: calc(14px * var(--fs-scale)); } /* 四层名字放大 */
-/* D0 率贴名字：名字列宽 = 本表最长名，D0 率左对齐于名字列右缘；剩余宽度给末列 */
+/* 名字列宽 = 本表最长名（JS --name-col-w）；其后：花费 / D0付费人 / CPP区 / 率区 / 解读 / 建议 */
 table.d.drill-t { table-layout: auto; }
 /* 名字列宽 = 整树最长名（JS 渲染时一次写入 --name-col-w），展开收合不变，D0 列不动 */
 table.d.drill-t col.c-name { width: var(--name-col-w, 240px); }
 table.d.drill-t td.tree-cell { min-width: var(--name-col-w, 240px); box-sizing: border-box; }
 table.d.drill-t td.tree-cell { max-width: none; overflow: visible; padding-right: 10px; }
-table.d.drill-t th:nth-child(2), table.d.drill-t td:nth-child(2) { text-align: left; padding-left: 4px; }
+/* 四层表第2列现为「花费」，保持右对齐（勿沿用旧「D0贴名字」左对齐） */
+table.d.drill-t th:nth-child(2), table.d.drill-t td:nth-child(2) { text-align: right; padding-left: 12px; }
 /* 四层 Meta 开/关小标签（最近一次拉取，级联） */
 table.d td.tree-cell .txt.is-off, table.d td.tree-cell .txt.is-off b { color: #8a93a0; text-decoration: line-through; }
 
