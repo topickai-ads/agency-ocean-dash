@@ -1266,7 +1266,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
     const rowHTML = (o, rowLv, label, extra, hasChild, key, depth) => {
       const d1 = d1Of(o, day);
-      const net7 = win.map(d => (o.byDay.get(d) || {}).n0 || 0);
+
       const caret = hasChild
         ? `<button class="caret ${state.open.has(key) ? 'open' : ''}" data-k="${encodeURIComponent(key)}" aria-label="展开"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
         : '<button class="caret blank" tabindex="-1"></button>';
@@ -1282,13 +1282,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
         <td>${cpp3d(o, day)}</td>
         <td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td>
         <td${pc(day, 3)}>${dkCell(dkOf(o.n, o.spend, day, 3))}</td>
-        <td${pc(day, 7)}>${dkCell(dkOf(o.n, o.spend, day, 7))}</td>
-        <td>${fmt.money(o.spend)}</td>
-        <td><b>${fmt.money(o.n[0])}</b></td>
-        <td${pc(day, 1)}>${d1.due ? fmt.money(d1.net) : d1.pend}</td>
         <td class="dim">${fmt.num(o.p0)}</td>
-        <td>${o.cpa ? fmt.money(o.cpa) : '<span class="dim">—</span>'}</td>
-        <td class="spark-cell">${sparkSvg(net7, { kind: 'bar', w: 62, h: 18, color: o.n[0] >= o.spend * BENCH ? '#a7e3c3' : '#f5c4bd' })}</td>
       </tr>`;
     };
 
@@ -1401,13 +1395,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
         <td>${cpp3d(c.total, c.day)}</td>
         <td${pc(c.day, 1, 'pc-bot')}>${f1.due ? ratePill(f1.rate) : f1.pend}</td>
         <td${pc(c.day, 3, 'pc-bot')}>${dkCell(dkOf(c.total.n, c.total.spend, c.day, 3))}</td>
-        <td${pc(c.day, 7, 'pc-bot')}>${dkCell(dkOf(c.total.n, c.total.spend, c.day, 7))}</td>
-        <td>${fmt.money(c.total.spend)}</td>
-        <td>${fmt.money(c.total.n0)}</td>
-        <td${pc(c.day, 1, 'pc-bot')}>${f1.due ? fmt.money(f1.net) : f1.pend}</td>
         <td>${fmt.num(c.total.p0)}</td>
-        <td>${c.total.p0 ? fmt.money(c.total.spend / c.total.p0) : '—'}</td>
-        <td></td>
       </tr>`;
   }
 
@@ -1417,18 +1405,15 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
     return `<div class="table-wrap"><table class="d drill-t" style="--name-col-w:${c.nameW}px">
       <colgroup>
-        <col class="c-name"><col class="c-rate"><col class="c-cpp"><col class="c-cpp"><col class="c-rate1"><col class="c-rate1"><col class="c-rate1"><col class="c-spend"><col class="c-d0"><col class="c-d1">
-        <col class="c-payers"><col class="c-cpa"><col class="c-spark">
+        <col class="c-name"><col class="c-rate"><col class="c-cpp"><col class="c-cpp"><col class="c-rate1"><col class="c-rate1"><col class="c-payers">
       </colgroup>
       <thead>
         <tr class="grp">
           <th>名称</th>
-          <th colspan="11">${fmt.md(day)} 安装 cohort</th>
-          <th>近 ${win.length} 天 D0 净</th>
+          <th colspan="6">${fmt.md(day)} 安装 cohort</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。灯与红黄绿筛选只看本列。')}</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。关停判断看本列。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th${pc(day, 3, 'pc-top')} title="累计到安装日+3 的净回收 ÷ 花费×1.05">D3 率${provTag(day, 3)}</th><th${pc(day, 7, 'pc-top')} title="累计到安装日+7 的净回收 ÷ 花费×1.05">D7 率${provTag(day, 7)}</th><th>花费</th><th>D0 净</th><th${pc(day, 1, 'pc-top')} title="D0+安装日+1 累计净">D1 净${provTag(day, 1)}</th><th>D0 付费人</th><th>D0 成本/人</th>
-          <th class="spark-cell">逐日</th>
+          <th>账号 / Campaign / Adset / Ad</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。灯与红黄绿筛选只看本列。')}</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。关停判断看本列。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th${pc(day, 3, 'pc-top')} title="累计到安装日+3 的净回收 ÷ 花费×1.05">D3 率${provTag(day, 3)}</th><th>D0 付费人</th>
         </tr>
       </thead>
       <tbody id="drillRows">${c.body}</tbody>
@@ -1439,49 +1424,29 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
   function focusHTML(fd) {
     const f = state.focus;
     if (!f) return '';
-    const node = groupRows(f.lv, fd, {}).find(o => o.key === f.key);
-    if (!node) return '';
-    const dates = fd;
-    const sp = dates.map(d => (node.byDay.get(d) || {}).spend || 0);
-    const rt = dates.map(d => { const x = node.byDay.get(d); return x && okSp(x.spend) ? (x.n0 / (x.spend * FEE)) : null; });
-
-    const spendChart = chartHTML({
-      H: 150, dates,
-      stack: [{ vals: sp, color: '#2563eb' }],
-      labels: dates.length <= 8 ? dates.length : 4,
-      fmtAxis: v => fmt.compact(v),
-      tip: i => `${dates[i]} · ${fmt.money(sp[i])}`
-    });
-    const rateChart = chartHTML({
-      H: 150, dates,
-      vals: rt.map(v => ({ v })),
-      ref: BENCH, refLabel: '50%', gstep: 0.25,
-      labels: dates.length <= 8 ? dates.length : 4,
-      color: TONE_C[tone(node.d0)],
-      fmtAxis: v => (v * 100).toFixed(0) + '%',
-      fmtTip: v => fmt.pct(v)
-    });
-
+    const dd = CUR_DAY || fd[fd.length - 1];
+    const nd = groupRows(f.lv, [dd], {}).find(o => o.key === f.key);
+    if (!nd) return '';
+    const w3 = [addDays(dd, -2), addDays(dd, -1), dd];
+    const m3 = groupRows(f.lv, w3, {}).find(o => o.key === f.key);
+    nd.spend3 = m3 ? m3.spend : nd.spend; nd.payers3 = m3 ? (m3.pc || 0) : (nd.pc || 0);
+    const x1 = d1Of(nd, dd), x3 = dkOf(nd.n, nd.spend, dd, 3);
     return `<div class="focus">
       <div class="focus-head">
         <span class="tag">${LV_NAME[f.lv]}</span>
-        ${lamp(node.d0, 'lg')}
+        ${lamp(nd.d0, 'lg')}
         <b>${esc(f.name)}</b>
         <button class="btn-ghost" id="focusClose">收起</button>
       </div>
       <div class="focus-body">
         <div class="focus-stats">
-          <div><span>花费</span><b>${fmt.money(node.spend)}</b></div>
-          <div><span>付费人</span><b>${fmt.num(node.p0)}</b></div>
-          <div><span>成本/人</span><b>${node.cpa ? fmt.money(node.cpa) : '—'}</b></div>
-          <div><span>D0 净</span><b>${fmt.money(node.n[0])}</b></div>
-          <div><span>D0 率</span><b>${fmt.pct(node.d0)}</b></div>
-          ${(() => { const dd = CUR_DAY || fd[fd.length - 1]; const nd = groupRows(f.lv, [dd], {}).find(o => o.key === f.key); const x = nd ? d1Of(nd, dd) : null;
-            return x ? `<div><span>${fmt.md(dd)} D1 净</span><b>${x.due ? fmt.money(x.net) : x.pend}</b></div><div><span>${fmt.md(dd)} D1 率</span><b>${x.due ? fmt.pct(x.rate) : x.pend}</b></div>${[3, 7].map(k => { const y = dkOf(nd.n, nd.spend, dd, k); return `<div><span>${fmt.md(dd)} D${k} 率</span><b>${y.due ? fmt.pct(y.rate) : y.pend}</b></div>`; }).join('')}` : ''; })()}
-          <div><span>累计率</span><b>${fmt.pct(node.cumRate, 0)}</b></div>
+          <div><span>${fmt.md(dd)} D0 率</span><b>${fmt.pct(nd.d0)}</b></div>
+          <div><span>D0 付费人数</span><b>${fmt.num(nd.p0)}</b></div>
+          <div><span>今日 CPP</span><b>${cppToday(nd, dd)}</b></div>
+          <div><span>近 3 日 CPP</span><b>${cpp3d(nd, dd)}</b></div>
+          <div><span>D1 率${provTag(dd, 1)}</span><b>${x1.due ? fmt.pct(x1.rate) : x1.pend}</b></div>
+          <div><span>D3 率${provTag(dd, 3)}</span><b>${x3.due ? fmt.pct(x3.rate) : x3.pend}</b></div>
         </div>
-        <div class="focus-chart">${spendChart}<div class="cap">每日花费</div></div>
-        <div class="focus-chart">${rateChart}<div class="cap">D0 回收率（虚线 50%）</div></div>
       </div>
     </div>`;
   }
@@ -1930,7 +1895,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     b.innerHTML = `
       <h3>核心口径</h3>
       <ul>
-        <li><b>CPP（先看 CPP，再看 D0）</b>：面板同时展示 <b>今日 CPP</b> 与 <b>近3日 CPP</b>。今日 = 今日花费 ÷ 今日 D0 付费人数；近3日 = 以焦点日为末日、含焦点日共 3 个自然日花费 ÷ 同窗 D0 付费人数（缺日按 0）。付费人数：<b>全市场一律 D0</b>（p0）。D1/D3/D5/D7 只作回收参考、不进 CPP。密度带两列相同：<b>≤$40 好 / $40–70 边缘 / &gt;$70 或窗内 0 付费且花费 ≥$100 差</b>。<b>关停判断仍以近3日 CPP 为准</b>（口径卡 density_kill_rules）。绝对愿意支付线，<b>禁止跟代理比 CPP</b>。「D0 成本/人」列仍是单日 花费/D0 付费人，不是 CPP。D0 率仍是当天付费金额÷当天花费（不动）。</li>
+        <li><b>CPP（先看 CPP，再看 D0）</b>：面板同时展示 <b>今日 CPP</b> 与 <b>近3日 CPP</b>。今日 = 今日花费 ÷ 今日 D0 付费人数；近3日 = 以焦点日为末日、含焦点日共 3 个自然日花费 ÷ 同窗 D0 付费人数（缺日按 0）。付费人数：<b>全市场一律 D0</b>（p0）。D1/D3/D5/D7 只作回收参考、不进 CPP。密度带两列相同：<b>≤$40 好 / $40–70 边缘 / &gt;$70 或窗内 0 付费且花费 ≥$100 差</b>。<b>关停判断仍以近3日 CPP 为准</b>（口径卡 density_kill_rules）。绝对愿意支付线，<b>禁止跟代理比 CPP</b>。D0 率仍是当天付费金额÷当天花费（不动）。</li>
         <li><b>D0 净回收率</b> = 安装当天净回收 / 当天花费。<b>50% 为正常参考值</b>，任何国家同一标准。</li>
         <li><b>D1 / D3 / D7 / D14</b> = 同一批新增在往后第 1/3/7/14 天的净回收额。</li>
         <li><b>Cohort 累计回收</b> = 那一天的新增，从 D0 到报表日的累计净回收 ÷ 那天的花费。各批观察期不同，越新越低是正常的。</li>
