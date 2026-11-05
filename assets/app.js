@@ -1278,11 +1278,13 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
           <span class="txt${(onOf(o, rowLv) || {}).on === false ? ' is-off' : ''}" title="${esc(label)}${(() => { const s = onOf(o, rowLv); return s ? ' · ' + esc(s.tip) : ''; })()}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>${stBadge(o, rowLv)}
         </td>
         <td>${ratePill(o.d0)}${o.est ? '<i class="est" title="这天没有这一条的回收归属，按花费分摊">估</i>' : ''}</td>
-        <td>${cppToday(o, day)}</td>
-        <td>${cpp3d(o, day)}</td>
         <td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td>
         <td${pc(day, 3)}>${dkCell(dkOf(o.n, o.spend, day, 3))}</td>
+        <td>${cppToday(o, day)}</td>
+        <td>${cpp3d(o, day)}</td>
         <td class="dim">${fmt.num(o.p0)}</td>
+        <td>${fmt.money(o.spend)}</td>
+        <td>${fmt.money(o.n[0] || 0)}</td>
       </tr>`;
     };
 
@@ -1391,11 +1393,13 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     return `<tr>
         <td class="tree-cell">${lamp(c.rate)}<span class="txt">${c.top.length} 条${c.tf ? TF_NAME[c.tf] + '灯' : '在投'}${LV_NAME[c.lv]}</span></td>
         <td>${ratePill(c.rate)}</td>
-        <td>${cppToday(c.total, c.day)}</td>
-        <td>${cpp3d(c.total, c.day)}</td>
         <td${pc(c.day, 1, 'pc-bot')}>${f1.due ? ratePill(f1.rate) : f1.pend}</td>
         <td${pc(c.day, 3, 'pc-bot')}>${dkCell(dkOf(c.total.n, c.total.spend, c.day, 3))}</td>
+        <td>${cppToday(c.total, c.day)}</td>
+        <td>${cpp3d(c.total, c.day)}</td>
         <td>${fmt.num(c.total.p0)}</td>
+        <td>${fmt.money(c.total.spend)}</td>
+        <td>${fmt.money(c.total.n0)}</td>
       </tr>`;
   }
 
@@ -1405,15 +1409,15 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
     return `<div class="table-wrap"><table class="d drill-t" style="--name-col-w:${c.nameW}px">
       <colgroup>
-        <col class="c-name"><col class="c-rate"><col class="c-cpp"><col class="c-cpp"><col class="c-rate1"><col class="c-rate1"><col class="c-payers">
+        <col class="c-name"><col class="c-rate"><col class="c-rate1"><col class="c-rate1"><col class="c-cpp"><col class="c-cpp"><col class="c-payers"><col class="c-spend"><col class="c-d0">
       </colgroup>
       <thead>
         <tr class="grp">
           <th>名称</th>
-          <th colspan="6">${fmt.md(day)} 安装 cohort</th>
+          <th colspan="8">${fmt.md(day)} 安装 cohort</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。灯与红黄绿筛选只看本列。')}</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。关停判断看本列。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th${pc(day, 3, 'pc-top')} title="累计到安装日+3 的净回收 ÷ 花费×1.05">D3 率${provTag(day, 3)}</th><th>D0 付费人</th>
+          <th>账号 / Campaign / Adset / Ad</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。灯与红黄绿筛选只看本列。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th${pc(day, 3, 'pc-top')} title="累计到安装日+3 的净回收 ÷ 花费×1.05">D3 率${provTag(day, 3)}</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。关停判断看本列。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>D0 付费人</th><th>花费</th><th>D0 净${tipI('D0 净 = 安装当天净回收金额（未÷花费）。')}</th>
         </tr>
       </thead>
       <tbody id="drillRows">${c.body}</tbody>
