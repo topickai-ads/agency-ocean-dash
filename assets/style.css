@@ -1007,8 +1007,10 @@ table.d.drill-t col.c-spend { width: 96px; }
 table.d.drill-t col.c-d0 { width: 96px; }
 table.d.drill-t col.c-adv { width: 190px; }
 table.d.drill-t col.c-read { width: 260px; }
-table.d.drill-t .adv-badge { white-space: normal !important; display: inline-block; line-height: 1.35; }
-table.d.drill-t .read-txt { white-space: normal; display: inline-block; line-height: 1.35; }
+table.d.drill-t td:has(.adv-badge),
+table.d.drill-t td:has(.read-txt) { white-space: normal; vertical-align: middle; }
+table.d.drill-t .adv-badge { white-space: normal !important; display: inline-block; line-height: 1.25; text-align: center; }
+table.d.drill-t .read-txt { white-space: normal; display: inline-block; line-height: 1.25; text-align: left; }
 table.d.drill-t col.c-rate { width: 118px; }
 table.d.drill-t col.c-rate1 { width: 96px; }
 table.d.drill-t col.c-d1 { width: 96px; }
