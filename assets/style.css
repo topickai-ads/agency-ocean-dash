@@ -1250,3 +1250,10 @@ table.d.drill-t { min-width: 1240px; }
   box-shadow: 0 6px 20px rgba(0,0,0,.18); pointer-events: none; text-align: left; }
 table.d.drill-t col.c-ratio { width: 104px; }
 table.d.drill-t tbody#drillRows tr.prod-head td { background: #eef2f9; border-top: 2px solid #c9d2e3; font-size: 1.02em; }
+table.d.drill-t col.c-bsc { width: 210px; }
+.bsc { display: flex; align-items: center; gap: 6px; justify-content: flex-end; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bsc .pace-bar { width: 46px; }
+.bsc b { font-weight: 620; min-width: 34px; text-align: right; }
+.bsc .bsc-n { color: var(--ink-2, #555); font-size: .92em; }
+.bsc.nob .bsc-n { color: inherit; font-size: 1em; }
+@media (max-width: 860px) { table.d.drill-t col.c-bsc { width: 176px; } .bsc .pace-bar { width: 30px; } }

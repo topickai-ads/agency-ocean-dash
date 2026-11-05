@@ -1316,9 +1316,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
           ${lamp(o.spend3, o.payers3)}${caret}
           <span class="txt${(onOf(o, rowLv) || {}).on === false ? ' is-off' : ''}" title="${esc(label)}${(() => { const s = onOf(o, rowLv); return s ? ' · ' + esc(s.tip) : ''; })()}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>${stBadge(o, rowLv)}
         </td>
-        <td>${budTd(bud)}</td>
-        <td class="${(o.spend3 || 0) < 100 ? 'dim' : ''}">${fmt.money(o.spend)}</td>
-        <td>${ratioTd(o.spend, bud)}</td>
+        <td>${bsCombo(o.spend, bud, (o.spend3 || 0) < 100)}</td>
         <td class="${(o.payers3 || 0) < 5 ? 'dim' : ''}">${fmt.num(o.p0)}</td>
         <td>${cppToday(o, day)}</td>
         <td>${cpp3d(o, day)}</td>
@@ -1377,7 +1375,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       const d0 = okSp(a.spend) ? a.n[0] / (a.spend * FEE) : null;
       return `<tr class="ov-row ${cls}">
         <td class="tree-cell">${lamp(a.spend3, a.payers3)}<span class="txt"><b>${esc(label)}</b></span></td>
-        <td>${budTd(b)}</td><td><b>${fmt.money(a.spend)}</b></td><td>${ratioTd(a.spend, b)}</td>
+        <td>${bsCombo(a.spend, b)}</td>
         <td>${fmt.num(a.p0)}</td><td>${cppToday(a, day)}</td><td>${cpp3d(a, day)}</td>
         <td>${ratePill(d0)}</td><td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td><td><span class="dim">—</span></td></tr>`;
     };
@@ -1566,14 +1564,20 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     return mk('保持', '', `R3：近3日 CPP ≤ $40，但付费人 < 5（当前 ${py} 人），暂不写可加`);
   }
   const budTd = b => b ? fmt.money(b) : '<span class="dim">—</span>';
-  const ratioTd = (sp, b) => paceCell(sp || 0, b);
+  /* 预算·花费·消耗比例合一列：条 + 比例 + 花费/预算；无预算只显示花费 */
+  const bsCombo = (sp, b, dim) => {
+    sp = sp || 0;
+    if (!b) return `<div class="bsc nob${dim ? ' dim' : ''}" title="无预算"><span class="bsc-n">${fmt.money(sp)}</span></div>`;
+    const r = sp / b;
+    return `<div class="bsc${dim ? ' dim' : ''}" title="消耗比例 ${fmt.pct(r, 0)} = 花费 ${fmt.money(sp)} ÷ 预算 ${fmt.money(b)}">
+      <span class="pace-bar"><i style="width:${Math.min(r * 100, 100).toFixed(0)}%"></i></span>
+      <b>${fmt.pct(r, 0)}</b><span class="bsc-n">${fmt.money(sp)}/${fmt.money(b)}</span></div>`;
+  };
   function drillFootHTML(c) {
     const f1 = d1Of({ spend: c.total.spend, n: [c.total.n1, 0] }, c.day);
     return `<tr>
         <td class="tree-cell">${lamp(c.total.spend3, c.total.payers3)}<span class="txt">${c.top.length} 条${c.tf ? TF_NAME[c.tf] + '灯' : '在投'}${LV_NAME[c.lv]}</span></td>
-        <td>${budTd(c.footB)}</td>
-        <td class="${(c.total.spend3 || 0) < 100 ? 'dim' : ''}">${fmt.money(c.total.spend)}</td>
-        <td>${ratioTd(c.total.spend, c.footB)}</td>
+        <td>${bsCombo(c.total.spend, c.footB)}</td>
         <td class="${(c.total.payers3 || 0) < 5 ? 'dim' : ''}">${fmt.num(c.total.p0)}</td>
         <td>${cppToday(c.total, c.day)}</td>
         <td>${cpp3d(c.total, c.day)}</td>
@@ -1589,15 +1593,15 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
     return `<div class="table-wrap"><table class="d drill-t" style="--name-col-w:${c.nameW}px">
       <colgroup>
-        <col class="c-name"><col class="c-spend"><col class="c-spend"><col class="c-ratio"><col class="c-payers"><col class="c-cpp"><col class="c-cpp"><col class="c-rate"><col class="c-rate1"><col class="c-adv">
+        <col class="c-name"><col class="c-bsc"><col class="c-payers"><col class="c-cpp"><col class="c-cpp"><col class="c-rate"><col class="c-rate1"><col class="c-adv">
       </colgroup>
       <thead>
         <tr class="grp">
           <th>名称</th>
-          <th colspan="9">${fmt.md(day)} 安装 cohort</th>
+          <th colspan="7">${fmt.md(day)} 安装 cohort</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>预算${tipI('账户 = 当日日预算台账（Meta ACTIVE 预算回写/变更日志回溯）；Campaign = Meta 当前 campaign 预算（budget_detail，仅今天有，历史日 —）；Adset/Ad 无日预算 → —。产品总览 = 该产品账户预算之和。')}</th><th>花费</th><th>消耗比例${tipI('消耗比例 = 花费 ÷ 预算；无预算显示 —。今天盘中会偏低。')}</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较近3日 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。行首灯、红黄绿筛选与关停判断都看本列。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；花费<$100 且无付费/很差 →灰灯（「样本不足」只在调整建议列出现）；不跟代理比。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看近3日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且无付费/很差 灰）。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('仅 ABO 的 Adset/Ad 给建议；CBO 不建议（显示 —）。Account / Campaign / 脚注仍 —。Ad 层先做同组比较：预算分不到 / 成本差于主 Ad / 预算少样本不足而主 Ad 表现好 →关停·挪给主 Ad；Ad 可减/关停，但加预算（+N%）只在 Adset 出。Adset 按 density_kill_rules（近3日 CPP）：焦点日为今天且北京时间未到 21:00：仅当近3日花费≥$100 且近3日 D0 付费人=0 →关停（不看仅今日 0），其余→再观察；花费<$100 且无付费/CPP>$70 →样本不足；花费≥$100 且 0 付费或 CPP>$70 →关停；$40–70 →减 20%（>$55 减 30%）；≤$40 且近3日 D0 付费人≥5 →加 20%（≤$30 加 30%，仅 Adset），否则保持。加减类单行：237→284（+20%）/ 237→166（-30%）（近3日花费÷3 为日均基准）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。D0 率不做门槛，不跟代理比。')}</th></tr>
+          <th>账号 / Campaign / Adset / Ad</th><th>消耗 / 预算${tipI('进度条 + 消耗比例 + 花费/预算。消耗比例 = 花费 ÷ 预算（今天盘中会偏低）。预算：账户 = 当日日预算台账；Campaign = Meta 当前 campaign 预算（仅今天，历史日无）；Adset/Ad 无日预算。无预算时只显示花费。产品行 = 该产品账户预算之和。')}</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较近3日 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。行首灯、红黄绿筛选与关停判断都看本列。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；花费<$100 且无付费/很差 →灰灯（「样本不足」只在调整建议列出现）；不跟代理比。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看近3日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且无付费/很差 灰）。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('仅 ABO 的 Adset/Ad 给建议；CBO 不建议（显示 —）。Account / Campaign / 脚注仍 —。Ad 层先做同组比较：预算分不到 / 成本差于主 Ad / 预算少样本不足而主 Ad 表现好 →关停·挪给主 Ad；Ad 可减/关停，但加预算（+N%）只在 Adset 出。Adset 按 density_kill_rules（近3日 CPP）：焦点日为今天且北京时间未到 21:00：仅当近3日花费≥$100 且近3日 D0 付费人=0 →关停（不看仅今日 0），其余→再观察；花费<$100 且无付费/CPP>$70 →样本不足；花费≥$100 且 0 付费或 CPP>$70 →关停；$40–70 →减 20%（>$55 减 30%）；≤$40 且近3日 D0 付费人≥5 →加 20%（≤$30 加 30%，仅 Adset），否则保持。加减类单行：237→284（+20%）/ 237→166（-30%）（近3日花费÷3 为日均基准）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。D0 率不做门槛，不跟代理比。')}</th></tr>
       </thead>
       <tbody id="drillOv" class="ov-body">${c.overview}</tbody>
       <tbody id="drillRows">${c.body}</tbody>
