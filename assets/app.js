@@ -29,15 +29,52 @@
   const LEDGER = M.budget_ledger || {};
   const ACCOUNTS = M.accounts || [];
 
+  /* 日历日（Asia/Shanghai）与数据最新日分离：tab 今天/昨天一律按日历，不把最新数据日冒充「今天」 */
+  function bjDate(d) {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d || new Date());
+  }
+  function bjHour() {
+    return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Shanghai', hour: '2-digit', hour12: false }).format(new Date())) % 24;
+  }
+  const CAL_TODAY = bjDate();
+  const CAL_YDAY = (() => {
+    const [y, m, d] = CAL_TODAY.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() - 1);
+    return dt.toISOString().slice(0, 10);
+  })();
+  const CAL_Y2 = (() => {
+    const [y, m, d] = CAL_TODAY.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() - 2);
+    return dt.toISOString().slice(0, 10);
+  })();
+
   const DATES = Array.from(new Set(ALL.map(r => r.d))).sort();
-  const TODAY = DATES[DATES.length - 1];
-  const COMPLETE = DATES.filter(d => d !== TODAY);
+  const TODAY = DATES[DATES.length - 1]; /* 最新有行的数据日：只用来判断「有没有今天的行」等 */
+  const HAS_TODAY_ROWS = DATES.indexOf(CAL_TODAY) >= 0;
+  const HAS_YDAY_ROWS = DATES.indexOf(CAL_YDAY) >= 0;
+  const COMPLETE = DATES.filter(d => d !== CAL_TODAY); /* 非日历今天的数据日 */
   const REV_UNTIL = M.revenue_until || '9999-12-31';
-  const LAST_REV_DAYS = Math.min(NOFF - 1, Math.max(0, dayDiff(COMPLETE[COMPLETE.length - 1], REV_UNTIL)));
+  const LAST_REV_DAYS = Math.min(NOFF - 1, Math.max(0, dayDiff((COMPLETE[COMPLETE.length - 1] || TODAY), REV_UNTIL)));
+
+  /* 盘中 live：仅日历今天，且今天确实有数据行 */
+  function isLiveDay(d) { return d === CAL_TODAY && HAS_TODAY_ROWS; }
+  function hasDayRows(d) { return DATES.indexOf(d) >= 0; }
+  /* 最新数据日可能仍是未刷完快照：如实写截至时间，不说「完整日 / 数据日」 */
+  function dataUntilHmm() {
+    const t = M.spend_pulled_at || M.generated_at || M.live_revenue_at || '';
+    return (t || '').slice(11, 16) || '';
+  }
+  function dayFreshTip(day) {
+    if (!day || day !== TODAY) return '';
+    const hmm = dataUntilHmm();
+    return hmm ? `数据截至 ${hmm}，随后还会再刷新` : '数据可能未刷完，随后还会再刷新';
+  }
 
   const state = {
     product: 'all',
-    view: 'y1',                 // today | y1 | y2 | d:YYYY-MM-DD
+    view: null,                 // today | y1 | y2 | d:YYYY-MM-DD；boot 按有无今天行默认
     q: '',
     level: 'account',
     open: new Set(),
@@ -109,22 +146,23 @@
     return dt.toISOString().slice(0, 10);
   }
 
-  /* 焦点日：今天 / 昨天 / 前天 / 日历里挑的某一天 */
+  /* 焦点日：今天 / 昨天 / 前天 = 北京日历；缺行不顺延到别的日（避免昨天挂到今天） */
   function focusDate() {
-    if (state.view === 'today') return TODAY;
-    if (state.view === 'y1') return COMPLETE[COMPLETE.length - 1] || TODAY;
-    if (state.view === 'y2') return COMPLETE[COMPLETE.length - 2] || COMPLETE[0] || TODAY;
-    if (state.view.indexOf('d:') === 0) {
+    if (state.view === 'today') return CAL_TODAY;
+    if (state.view === 'y1') return CAL_YDAY;
+    if (state.view === 'y2') return CAL_Y2;
+    if (state.view && state.view.indexOf('d:') === 0) {
       const d = state.view.slice(2);
       if (DATES.indexOf(d) >= 0) return d;
-      if (d > TODAY) return TODAY;
-      return DATES.find(x => x >= d) || DATES[0];   // 那天没数据就顺延到最近有数据的一天
+      if (d > CAL_TODAY) return CAL_TODAY;
+      /* 自选日：那天没数据也返回该日，由空态处理（不把别的日冒充选中日） */
+      return d;
     }
-    return COMPLETE[COMPLETE.length - 1] || TODAY;
+    return HAS_TODAY_ROWS ? CAL_TODAY : CAL_YDAY;
   }
 
   function isCustomDate() {
-    return state.view.indexOf('d:') === 0;
+    return !!(state.view && state.view.indexOf('d:') === 0);
   }
 
   function scopeStart() {
@@ -136,17 +174,13 @@
     return min || COMPLETE[0];
   }
 
-  /* 窗口 = 焦点日往前共 7 个点（今天那根是盘中的第 7 个点） */
+  /* 窗口 = 焦点日往前共 7 个日历点，只保留有行的日；盘中今天若有行则作为末点 */
   function windowDates() {
     const f = focusDate();
-    let ds;
-    if (f === TODAY) ds = COMPLETE.slice(-(WINDOW_DAYS - 1)).concat(TODAY);
-    else {
-      const i = COMPLETE.indexOf(f);
-      ds = i < 0 ? [f] : COMPLETE.slice(Math.max(0, i - WINDOW_DAYS + 1), i + 1);
-    }
+    const raw = [];
+    for (let i = WINDOW_DAYS - 1; i >= 0; i--) raw.push(addDays(f, -i));
     const start = scopeStart();
-    return ds.filter(d => d >= start);
+    return raw.filter(d => d >= start && hasDayRows(d));
   }
 
   /* ---------------- 数据切片 ---------------- */
@@ -196,7 +230,7 @@
       const spendA = a.spendA, p0 = a.p0, net0 = a.n[0] || 0;
       const cum = a.n.reduce((x, y) => x + y, 0);
       const obs = Math.max(0, Math.min(NOFF - 1, dayDiff(d, REV_UNTIL)));
-      const live = d === TODAY;
+      const live = isLiveDay(d);
       return {
         d, spendA, spendS: a.spendS,
         p0, net0, cum, obs, live,
@@ -636,7 +670,7 @@
 
   /* 表体（名称/预算/消耗/消耗比例）—— 展开时只换这一块，整页不重绘 */
   function bsTableInner(focus) {
-    const live = focus === TODAY;
+    const live = isLiveDay(focus);
     const B = budgetAt(focus);
 
     /* 当日花费 + D0 净回收（只算当前视图匹配的量） */
@@ -776,7 +810,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
   }
 
   function bsNoteHTML(focus, T) {
-    const live = focus === TODAY;
+    const live = isLiveDay(focus);
     return T.anyB
       ? `预算 = 当天真在跑的 campaign 预算之和${live
           ? '；今天还没跑完，消耗比例收盘前会一直偏低'
@@ -785,7 +819,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
   }
 
   function budgetSpendCard(dates, focus, cur, focusIdx) {
-    const live = focus === TODAY;
+    const live = isLiveDay(focus);
     const T = bsTableInner(focus);
 
     return `<article class="card bs">
@@ -808,12 +842,12 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     const vals = daily.map(o => o.spendA);
     const i = focusIdx >= 0 ? focusIdx : dates.length - 1;
     const d = dates[i] || TODAY;
-    const live = d === TODAY;
+    const live = isLiveDay(d);
 
     const chart = chartHTML({
       H: 246, dates,
       vals: vals.map(v => ({ v })),
-      liveIdx: dates.indexOf(TODAY),
+      liveIdx: dates.indexOf(CAL_TODAY),
       focusIdx,
       labels: dates.length <= 8 ? dates.length : 5,
       color: '#2563eb',
@@ -822,7 +856,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       fmtTip: v => fmt.money(v)
     });
 
-    const winSum = dates.filter(x => x !== TODAY)
+    const winSum = dates.filter(x => !isLiveDay(x))
       .reduce((a, x) => a + (daily.find(o => o.d === x) || { spendA: 0 }).spendA, 0);
 
     return `<article class="card mini">
@@ -841,7 +875,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
   function snapStrip(daily, i) {
     const cur = daily[i];
     if (!cur) return '';
-    const live = cur.d === TODAY;
+    const live = isLiveDay(cur.d);
     if (live && !cur.net0) {
       /* 盘中还没有回收数字，摆一排破折号没意义，直接说清楚 */
       return `<div class="snap snap-live">
@@ -876,13 +910,13 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     const daily = buildDaily(dates);
     const i = focusIdx >= 0 ? focusIdx : daily.length - 1;
     const cur = daily[i];
-    const live = cur.d === TODAY;
+    const live = isLiveDay(cur.d);
 
     const rateChart = chartHTML({
       H: 168, dates, vals: daily.map(o => ({ v: o.rate })),
       labels: dates.length <= 8 ? dates.length : 4,
       ref: BENCH, refLabel: '50%', gstep: 0.25,
-      liveIdx: dates.indexOf(TODAY), focusIdx: i,
+      liveIdx: dates.indexOf(CAL_TODAY), focusIdx: i,
       color: TONE_C[rateTone(cur.rate)],
       fmtAxis: v => (v * 100).toFixed(0) + '%',
       fmtTip: v => fmt.pct(v)
@@ -892,7 +926,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       H: 168, dates, vals: daily.map(o => ({ v: o.cumRate })),
       labels: dates.length <= 8 ? dates.length : 4,
       ref: BENCH, refLabel: 'D0 基准', gstep: 0.25,
-      liveIdx: dates.indexOf(TODAY), focusIdx: i,
+      liveIdx: dates.indexOf(CAL_TODAY), focusIdx: i,
       color: '#0e9384',
       fmtAxis: v => (v * 100).toFixed(0) + '%',
       fmtTip: v => fmt.pct(v)
@@ -901,7 +935,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     const cpaChart = chartHTML({
       H: 168, dates, vals: daily.map(o => ({ v: o.cpa })),
       labels: dates.length <= 8 ? dates.length : 4,
-      liveIdx: dates.indexOf(TODAY), focusIdx: i,
+      liveIdx: dates.indexOf(CAL_TODAY), focusIdx: i,
       color: '#4e5ba6',
       fmtAxis: v => '$' + Math.round(v),
       fmtTip: v => fmt.money(v)
@@ -940,8 +974,10 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
   /* 逐日明细单独放宽到焦点日往前 21 个完整日（数据里有多少给多少），否则 D14 永远「还 N 天」；代理版数据层只有 7 天，自然只显示 7 天 */
   function detailDates() {
     const f = focusDate();
-    const i = f === TODAY ? COMPLETE.length - 1 : COMPLETE.indexOf(f);
-    if (i < 0) return windowDates();
+    /* 回收明细默认到「非盘中」末日：日历今天有行则不含今天；否则以焦点日为末 */
+    const end = isLiveDay(f) ? (COMPLETE[COMPLETE.length - 1] || f) : f;
+    const i = COMPLETE.indexOf(end);
+    if (i < 0) return windowDates().filter(d => !isLiveDay(d));
     const start = scopeStart();
     return COMPLETE.slice(Math.max(0, i - 20), i + 1).filter(d => d >= start);
   }
@@ -950,7 +986,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
   function detailCard(dates) {
     const rows = dailyMap('campaign', dates);
-    const list = dates.filter(d => d !== TODAY).slice().reverse();
+    const list = dates.filter(d => !isLiveDay(d)).slice().reverse();
     const tot = { spend: 0, p0: 0, n: new Array(NOFF).fill(0) };
     list.forEach(d => {
       const a = rows.get(d) || ZERO();
@@ -1083,7 +1119,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       const thin = basis === 'thin';
 
       for (const { o: cur, when } of days) {
-        const live = cur.d === TODAY;
+        const live = isLiveDay(cur.d);
         const bud = budgetAt(cur.d, pid).total;
 
         /* 盘中：还没有回收，先说清楚花到哪儿了 */
@@ -1093,7 +1129,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
             rule: 'live:' + pid, when: '盘中',
             lv: (r != null && r >= 0.9) ? 'warn' : 'ok', w: 0.15, mat: cur.spendA,
             title: `${pre}${fmt.md(cur.d)} 盘中已花 ${fmt.money(cur.spendA)}${r != null ? `，占当日预算 ${fmt.pct(r, 0)}` : ''}`,
-            body: `回收是实时口径（直接读后端交易），还剩 ${Math.max(0, 24 - new Date().getHours())} 小时会继续涨；数字明显不对劲再往下钻。`,
+            body: `回收是实时口径（直接读后端交易），还剩 ${Math.max(0, 24 - bjHour())} 小时会继续涨；数字明显不对劲再往下钻。`,
             metric: r != null ? fmt.pct(r, 0) : '—', metricSub: '盘中消耗'
           });
         }
@@ -1286,7 +1322,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     /* 预算：账户 = 台账当日值；Campaign/Adset = budget_tree 回溯到焦点日（ABO Adset 有日预算；Ad 无） */
     const BUD = budgetAt(day);
     const campBudMap = {};
-    if (day === TODAY) for (const acc in (M.budget_detail || {})) {
+    if (isLiveDay(day)) for (const acc in (M.budget_detail || {})) {
       const m = campBudMap[acc] = {};
       for (const d of M.budget_detail[acc] || []) m[d.camp] = (m[d.camp] || 0) + (d.budget || 0);
     }
@@ -1471,7 +1507,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
   }
   /* 观察日（安装日+k）当天还没结束：临时累计率，灰底虚线 + 「未完」，不当定论 */
   /* 列级：观察日已开始但当天未结束 → 整列虚线框 + 表头「未完」；格子内照常上色 */
-  const isProv = (day, k) => k > 0 && addDays(day, k) <= REV_UNTIL && addDays(day, k) >= TODAY;
+  const isProv = (day, k) => k > 0 && addDays(day, k) <= REV_UNTIL && addDays(day, k) >= CAL_TODAY;
   const pc = (day, k, edge) => isProv(day, k) ? ` class="prov-col${edge ? ' ' + edge : ''}"` : '';
   const provTag = (day, k) => isProv(day, k) ? '<i class="prov-tag">未完</i>' : '';
   const dkCell = (x, digits) => x.due ? ratePill(x.rate, digits) : x.pend;
@@ -1531,7 +1567,6 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
   const cpp3d = (o, day) => cppCell(o.spend3, o.payers3, '近3日 CPP', `${fmt.md(addDays(day, -2))}–${fmt.md(day)}`);
 
   /* 调整建议（Billy 2026-11-05：今日 CPP 主、近3日辅；D0 率不做门槛，不跟代理比） */
-  function bjHour() { return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Shanghai', hour: '2-digit', hour12: false }).format(new Date())) % 24; }
   function campBudgetKind(acc, camp) {
     const det = (M.budget_detail || {})[acc] || [];
     if (!det.length || !camp) return null;
@@ -1631,12 +1666,12 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       if (todayOk && d0Ok) return mk('恢复打开', 'ok', `已关（${raw}）但今日 CPP ≤ $40 且有付费、D0 ≥ 30%${better ? '（表现更好：D0≥50% 或 CPP≤$25）' : ''}${upNote}`);
       return mk('保持关停', 'hold', `已关（${raw}），今日表现不达恢复门槛（CPP≤$40 且有付费、D0≥30%）或样本不足`);
     }
-    /* 1) 21:00 前：仅「近3日花≥$100 且近3日 0 付费 → 关停」例外；其余再观察 */
-    if (day === TODAY && bjHour() < 21 && sp3 >= 100 && py3 === 0) {
+    /* 1) 再观察仅：焦点=日历今天 且 今天有数据 且 北京时间<21:00；日历昨天永远不锁 */
+    if (isLiveDay(day) && bjHour() < 21 && sp3 >= 100 && py3 === 0) {
       if (isAd) return mk(sibs && sibs.length ? '关停·挪给同组' : '关停', 'bad', '21:00 前例外：近3日花费 ≥ $100 且近3日 D0 付费人 = 0（不看仅今日 0）');
       return mk(shutTxt('关停'), 'bad', '21:00 前例外：近3日花费 ≥ $100 且近3日 D0 付费人 = 0；差 Adset 关停，历史有量则提示疲劳换素材');
     }
-    if (day === TODAY && bjHour() < 21) return mk('再观察', '', '焦点日未到晚间（21:00），暂不给加减/关停建议');
+    if (isLiveDay(day) && bjHour() < 21) return mk('再观察', '', '日历今天未到晚间（21:00），暂不给加减/关停建议');
 
     /* 2) Ad 同组：主 Ad 强 / 本条差优先看今日 CPP；近3日花费仍判谁在吃预算 */
     if (isAd && sibs && sibs.length) {
@@ -1742,7 +1777,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
           <th colspan="7">${fmt.md(day)} 安装 cohort</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>消耗 / 预算${tipI('进度条 + 消耗比例 + 花费/预算。消耗比例 = 花费 ÷ 预算（今天盘中会偏低）。预算：账户 = 当日日预算台账；Campaign = CBO 用 campaign 预算、ABO 用当天有花费 Adset 预算之和（budget_tree 回溯到焦点日）；Adset = 自身日预算（ABO）；Ad 无日预算。无预算时只显示花费。产品行 = 该产品账户预算之和。')}</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较近3日 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。本列只作辅读（防单日偶然好看）；行首灯、红黄绿筛选与调整建议以今日 CPP 为主。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看今日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且无付费/很差 灰）；D0 率不作加减停主门槛。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('仅 ABO 的 Adset/Ad 给建议；CBO/未知显示 —。建议以今日 CPP 为主、近3日作辅；D0 率不作关停门槛，但今日 CPP 好（≤$40）时按 D0 分档加档：D0<30% 保持 · 30%–50% +15% · ≥50% +25%（CPP≤$25 不单独加档；无 +10/+20/+30）；减档对称 -15% / -25%（>$55 用 -25%）。小预算（日预算≤$50）且今日 CPP $40–70、D0<30% → 直接关停（不减到 $30，不看消耗进度）；>$50 仍 -15/-25。近3日差不挡加：今日好且 CPP 已降 → 建议加。读数优先级今日 CPP→D0→消耗进度只作辅。CPP $40–70：先入减档带；D0<30%/无 D0 必须减（打满不护航）；D0≥30% 时 pace 才参与（≥90% 且 D0≥50% 可 +15% · ≥90% 且 D0 30–50% 可保持 · 否则减）。差 Adset 关停；若历史有量/预算抬过 → 提示疑疲劳并建议补同营其他好 Adset 下的素材（列出 1–2 个今日花费最高的好 Ad 名）；减预算只在 Adset；Ad 层只关停或保持（永不写「减预算」/加减金额；弱 Ad 仍可关停·挪给主 Ad）。21:00 前默认再观察，例外近3日花≥$100 且近3日 D0 付费=0 → 关停。关停主看今日（花≥$100 且 0 付费或 CPP>$70）。加减金额基准=Adset 日预算；无预算不给 xx→yy。已关行：违规（DISAPPROVED/WITH_ISSUES）保持关停；人工/级联暂停且今日 CPP≤$40 有付费、D0≥30% → 恢复打开（上级关需先开上级）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。')}</th></tr>
+          <th>账号 / Campaign / Adset / Ad</th><th>消耗 / 预算${tipI('进度条 + 消耗比例 + 花费/预算。消耗比例 = 花费 ÷ 预算（今天盘中会偏低）。预算：账户 = 当日日预算台账；Campaign = CBO 用 campaign 预算、ABO 用当天有花费 Adset 预算之和（budget_tree 回溯到焦点日）；Adset = 自身日预算（ABO）；Ad 无日预算。无预算时只显示花费。产品行 = 该产品账户预算之和。')}</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较近3日 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。本列只作辅读（防单日偶然好看）；行首灯、红黄绿筛选与调整建议以今日 CPP 为主。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看今日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且无付费/很差 灰）；D0 率不作加减停主门槛。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('仅 ABO 的 Adset/Ad 给建议；CBO/未知显示 —。建议以今日 CPP 为主、近3日作辅；D0 率不作关停门槛，但今日 CPP 好（≤$40）时按 D0 分档加档：D0<30% 保持 · 30%–50% +15% · ≥50% +25%（CPP≤$25 不单独加档；无 +10/+20/+30）；减档对称 -15% / -25%（>$55 用 -25%）。小预算（日预算≤$50）且今日 CPP $40–70、D0<30% → 直接关停（不减到 $30，不看消耗进度）；>$50 仍 -15/-25。近3日差不挡加：今日好且 CPP 已降 → 建议加。读数优先级今日 CPP→D0→消耗进度只作辅。CPP $40–70：先入减档带；D0<30%/无 D0 必须减（打满不护航）；D0≥30% 时 pace 才参与（≥90% 且 D0≥50% 可 +15% · ≥90% 且 D0 30–50% 可保持 · 否则减）。差 Adset 关停；若历史有量/预算抬过 → 提示疑疲劳并建议补同营其他好 Adset 下的素材（列出 1–2 个今日花费最高的好 Ad 名）；减预算只在 Adset；Ad 层只关停或保持（永不写「减预算」/加减金额；弱 Ad 仍可关停·挪给主 Ad）。仅日历今天且北京时间 21:00 前默认再观察（昨天不锁）；例外近3日花≥$100 且近3日 D0 付费=0 → 关停。关停主看今日（花≥$100 且 0 付费或 CPP>$70）。加减金额基准=Adset 日预算；无预算不给 xx→yy。已关行：违规（DISAPPROVED/WITH_ISSUES）保持关停；人工/级联暂停且今日 CPP≤$40 有付费、D0≥30% → 恢复打开（上级关需先开上级）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。')}</th></tr>
       </thead>
       <tbody id="drillOv" class="ov-body">${c.overview}</tbody>
       <tbody id="drillRows">${c.body}</tbody>
@@ -1806,13 +1841,34 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     mountCharts();
   }
 
+  function noDayDataHTML(day) {
+    const title = day === CAL_TODAY ? '今天没数据' : (day === CAL_YDAY ? '昨天没数据' : `${fmt.md(day)} 没数据`);
+    const tip = dayFreshTip(TODAY);
+    const hint = day === CAL_TODAY
+      ? '转点后若 Meta/面板还没拉到今天的行，就先空着；可切到「昨天」看。'
+      : '这一天面板里还没有行。';
+    return `<article class="card" style="margin-top:8px"><div class="empty">${esc(title)}</div>
+      <div class="sub" style="padding:0 16px 16px;color:var(--ink-2)">${esc(hint)}${tip ? ' · ' + esc(tip) : ''}</div></article>`;
+  }
+
   function render() {
     syncTabs();
+    const focus = focusDate();
+    /* 日历今天无行 → 空态，绝不把昨天的数挂在「今天」 */
+    if (!hasDayRows(focus)) {
+      CUR_DAY = focus;
+      CUR_WIN = [];
+      CUR_FD = [];
+      main.innerHTML = state.tab === 'recovery'
+        ? `<section class="sect">${sec('01', '回收情况', '', fmt.md(focus))}${noDayDataHTML(focus)}</section>`
+        : `<div id="drillSlot"><section class="sect">${sec('01', '四层明细', '', fmt.md(focus))}${noDayDataHTML(focus)}</section></div>`;
+      syncHash();
+      return;
+    }
     const wd = windowDates();
-    const FD = wd.filter(d => d !== TODAY);
+    const FD = wd.filter(d => !isLiveDay(d));
     CUR_FD = FD;
 
-    const focus = focusDate();
     const focusIdx = wd.indexOf(focus);
     const daily = buildDaily(wd);
     const cur = daily[focusIdx] || daily[daily.length - 1];
@@ -1854,17 +1910,23 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
   function renderDrill(slot) {
     /* 与顶部日期筛选共用焦点日 + 7 天窗口（不再单独 daySeg） */
-    const days = windowDates();
     const day = focusDate();
     state.drillDay = day;
     CUR_DAY = day;
+    if (!hasDayRows(day)) {
+      CUR_WIN = [];
+      (slot || main).innerHTML = `<section class="sect">${sec('01', '四层明细', '', fmt.md(day))}${noDayDataHTML(day)}</section>`;
+      syncHash();
+      return;
+    }
+    const days = windowDates();
     CUR_WIN = days;
 
     (slot || main).innerHTML = `
       <section class="sect">
         ${sec('01', '四层明细',
           `账号 → Campaign → Adset → Ad，只列当天在投的 · 日期跟顶部筛选 · 行首灯看今日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且付费差 灰；近3日作辅）`,
-          `${fmt.md(day)}${day === TODAY ? ' 盘中' : ''} · 花费 ${fmt.money((() => { let v = 0; for (const r of ALL) if (r.lv === 'campaign' && r.d === day && match(r, {})) v += r.spend; return v; })())}`)}
+          `${fmt.md(day)}${isLiveDay(day) ? ' 盘中' : ''}${(() => { const t = dayFreshTip(day); return t ? ' · ' + t : ''; })()} · 花费 ${fmt.money((() => { let v = 0; for (const r of ALL) if (r.lv === 'campaign' && r.d === day && match(r, {})) v += r.spend; return v; })())}`)}
         <article class="card">
           <div class="drill-ctrl">
             <div class="seg" id="levelSeg">
@@ -1979,7 +2041,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     const dpBtn = $('#datePickBtn'), dpIn = $('#datePick');
     if (dpBtn && dpIn) {
       dpIn.min = DATES[0];
-      dpIn.max = TODAY;
+      dpIn.max = CAL_TODAY;
       dpBtn.addEventListener('click', () => {
         try {
           if (dpIn.showPicker) { dpIn.showPicker(); return; }
@@ -2137,11 +2199,15 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     const gen = new Date((M.generated_at || '').replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
     const ok = !isNaN(gen.getTime());
 
-    if (!ok) put('asOf', esc(M.as_of || '数据时间未知'));
+    if (!ok) put('asOf', esc((M.as_of || '').replace(/数据日[^·]*/g, '').trim() || '数据时间未知'));
     else {
       const mins = Math.max(0, Math.round((Date.now() - gen.getTime()) / 60000));
       const rel = mins < 1 ? '刚刚' : mins < 60 ? `${mins} 分钟前` : `${(mins / 60).toFixed(1)} 小时前`;
-      put('asOf', `数据更新于 <b>${rel}</b>`);
+      const hmm = dataUntilHmm();
+      const pending = (!HAS_TODAY_ROWS || TODAY === CAL_TODAY)
+        ? (hmm ? ` · 数据截至 <b>${hmm}</b>，随后还会再刷新` : ' · 随后还会再刷新')
+        : (hmm ? ` · 数据截至 <b>${hmm}</b>` : '');
+      put('asOf', `数据更新于 <b>${rel}</b>${pending}`);
     }
 
     /* 花费和回收是两条独立管线，各自的时间要分开写清楚 */
@@ -2215,7 +2281,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     b.innerHTML = `
       <h3>核心口径</h3>
       <ul>
-        <li><b>CPP（先看 CPP，再看 D0）</b>：面板同时展示 <b>今日 CPP</b> 与 <b>近3日 CPP</b>。今日 = 今日花费 ÷ 今日 D0 付费人数；近3日 = 以焦点日为末日、含焦点日共 3 个自然日花费 ÷ 同窗 D0 付费人数（缺日按 0）。付费人数：<b>全市场一律 D0</b>（p0）。D1/D3/D5/D7 只作回收参考、不进 CPP。CPP 分档两列相同：<b>≤$40 好 / $40–70 边缘 / &gt;$70 或窗内 0 付费且花费 ≥$100 差</b>。<b>建议与行首灯看今日 CPP，近3日作辅</b>（防单日偶然好看；读数顺序：当日CPP → 近3日CPP → D0率；D0率不作加减停主门槛）。绝对愿意支付线，<b>禁止跟代理比 CPP</b>。D0 率仍是当天付费金额÷当天花费（不动）。<b>调整建议列</b>仅 ABO 的 Adset/Ad：今日 CPP 好时按 D0 分档加档：D0&lt;30% 保持 · 30%–50% +15% · ≥50% +25%（CPP≤$25 不单独加档；近3日差不挡加）；减档 -15%/-25%；消耗≥90% 且 CPP 尚可不减；差 Adset 关停并提示疲劳换素材；Ad 层纯文案不挪金额；21:00 前默认再观察（例外近3日花≥$100且0付费→关停）。<b>已关的行</b>：违规下线（DISAPPROVED/WITH_ISSUES）保持关停；人工/级联暂停但今日 CPP≤$40 有付费且 D0≥30% → 恢复打开（上级关先开上级）。</li>
+        <li><b>CPP（先看 CPP，再看 D0）</b>：面板同时展示 <b>今日 CPP</b> 与 <b>近3日 CPP</b>。今日 = 今日花费 ÷ 今日 D0 付费人数；近3日 = 以焦点日为末日、含焦点日共 3 个自然日花费 ÷ 同窗 D0 付费人数（缺日按 0）。付费人数：<b>全市场一律 D0</b>（p0）。D1/D3/D5/D7 只作回收参考、不进 CPP。CPP 分档两列相同：<b>≤$40 好 / $40–70 边缘 / &gt;$70 或窗内 0 付费且花费 ≥$100 差</b>。<b>建议与行首灯看今日 CPP，近3日作辅</b>（防单日偶然好看；读数顺序：当日CPP → 近3日CPP → D0率；D0率不作加减停主门槛）。绝对愿意支付线，<b>禁止跟代理比 CPP</b>。D0 率仍是当天付费金额÷当天花费（不动）。<b>调整建议列</b>仅 ABO 的 Adset/Ad：今日 CPP 好时按 D0 分档加档：D0&lt;30% 保持 · 30%–50% +15% · ≥50% +25%（CPP≤$25 不单独加档；近3日差不挡加）；减档 -15%/-25%；消耗≥90% 且 CPP 尚可不减；差 Adset 关停并提示疲劳换素材；Ad 层纯文案不挪金额；仅日历今天且北京&lt;21:00 默认再观察（昨天不锁；例外近3日花≥$100且0付费→关停）。<b>已关的行</b>：违规下线（DISAPPROVED/WITH_ISSUES）保持关停；人工/级联暂停但今日 CPP≤$40 有付费且 D0≥30% → 恢复打开（上级关先开上级）。</li>
         <li><b>D0 净回收率</b> = 安装当天净回收 / 当天花费。<b>50% 为正常参考值</b>，任何国家同一标准。</li>
         <li><b>D1 / D3 / D7 / D14</b> = 同一批新增在往后第 1/3/7/14 天的净回收额。</li>
         <li><b>Cohort 累计回收</b> = 那一天的新增，从 D0 到报表日的累计净回收 ÷ 那天的花费。各批观察期不同，越新越低是正常的。</li>
@@ -2233,9 +2299,9 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
       <h3>页面口径</h3>
       <ul>
-        <li>时间按「实时（今天）/ 昨天 / 前天」优先，长区间放后面 —— 微操看的是最近一两天。</li>
+        <li>「今天 / 昨天 / 前天」按北京日历；转点后若今天还没行 → 显示「今天没数据」，不会把昨天挂到今天。最新一天若仍是快照，会提示数据截至时间、随后再刷新（不说「完整日」）。</li>
         <li>一切以「每天」为单位：曲线每个点就是那一天的实数，参考线只作参照，不做事先平均。</li>
-        <li>今天盘中只记花费，不结算回收，所以回收曲线到昨天为止。</li>
+        <li>日历今天若有数据：盘中只记花费、回收仍会继续涨；回收曲线不以未完的今天作定论。</li>
         ${IS_AG ? `<li>回收只算 ${esc(AG)} 自己的量，不含自投。</li>` : `<li>内部全量：花费与回收含 Ocean + 自投 zt。</li>`}
       </ul>
 
@@ -2264,8 +2330,14 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
   /* ---------------- boot ---------------- */
 
   readHash();
+  if (!state.view) state.view = HAS_TODAY_ROWS ? 'today' : 'y1';
   initChrome();
   syncControls();
   render();
-  window.addEventListener('hashchange', () => { readHash(); syncControls(); render(); });
+  window.addEventListener('hashchange', () => {
+    readHash();
+    if (!state.view) state.view = HAS_TODAY_ROWS ? 'today' : 'y1';
+    syncControls();
+    render();
+  });
 })();
