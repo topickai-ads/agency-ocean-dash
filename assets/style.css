@@ -1005,6 +1005,7 @@ table.d.drill-t { table-layout: fixed; width: 100%; min-width: 1080px; }
 table.d.drill-t col.c-name { width: auto; }
 table.d.drill-t col.c-spend { width: 96px; }
 table.d.drill-t col.c-d0 { width: 96px; }
+table.d.drill-t col.c-adv { width: 104px; }
 table.d.drill-t col.c-rate { width: 118px; }
 table.d.drill-t col.c-rate1 { width: 96px; }
 table.d.drill-t col.c-d1 { width: 96px; }
