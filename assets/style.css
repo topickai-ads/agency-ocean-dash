@@ -1257,3 +1257,9 @@ table.d.drill-t col.c-bsc { width: 210px; }
 .bsc .bsc-n { color: var(--ink-2, #555); font-size: .92em; }
 .bsc.nob .bsc-n { color: inherit; font-size: 1em; }
 @media (max-width: 860px) { table.d.drill-t col.c-bsc { width: 176px; } .bsc .pace-bar { width: 30px; } }
+
+/* t191：消耗/预算列左对齐 + 轨道加深，进度看得清 */
+table.d.drill-t td:has(> .bsc), table.d.drill-t th:nth-child(2) { text-align: left; }
+.bsc { justify-content: flex-start; }
+.bsc .pace-bar { width: 56px; height: 8px; background: #cfd6e2; border-radius: 3px; box-shadow: inset 0 0 0 1px #b7c0d0; overflow: hidden; flex: none; }
+.bsc .pace-bar i { background: #3b6fd8; border-radius: 3px; }
