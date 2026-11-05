@@ -1570,7 +1570,10 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     const est = '基准=Adset 当前日预算（budget_tree 回溯到焦点日）';
     const chgHtml = (pct) => {
       if (base == null) return null;
-      const from = Math.round(base), to = Math.round(base * (1 + pct / 100));
+      const from = Math.round(base);
+      let to = Math.floor(base * (1 + pct / 100) / 10) * 10;
+      if (pct > 0 && to <= from) to = Math.floor(from / 10) * 10 + 10;
+      if (pct < 0 && to >= from) to = Math.max(0, Math.ceil(from / 10) * 10 - 10);
       const sign = pct > 0 ? '+' : '-';
       return `${from}→${to}（${sign}${Math.abs(pct)}%）`;
     };
