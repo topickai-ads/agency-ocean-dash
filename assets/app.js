@@ -1432,14 +1432,51 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     if (BUD.known) for (const n in BUD.acc) { const p = (acctMeta(n) || {}).product; if (p) prodBud[p] = (prodBud[p] || 0) + (BUD.acc[n] || 0); }
     for (const pid in prodBud) if (!prodSum[pid] && prodBud[pid]) prodSum[pid] = Object.assign(z(), { pid });
     const prodRows = Object.values(prodSum).filter(a => a.spend > 0 || prodBud[a.pid]).sort((x, y) => y.spend - x.spend);
-    const ovRow = (a, label, b, cls) => {
+    /* 产品行调整建议：汇总下级有金额的建议（ABO Adset ±% / CBO Campaign ±% / 有预算关停 −当前）净日预算变化 */
+    const sumProdAdviceDelta = (accList) => {
+      let net = 0, n = 0;
+      const visit = (o, l, sibs) => {
+        if (l === 'campaign' || l === 'adset') {
+          const bud = budOf(o, l);
+          const html = adviceCell(o, day, {
+            isAd: false,
+            isCamp: l === 'campaign',
+            sibs: (sibs || []).filter(x => x !== o),
+            bud,
+            status: onOf(o, l),
+            adsOf: aset => kidsOf('ad').filter(r => r.acc === aset.acc && r.camp === aset.camp && (r.ads || '') === (aset.ads || ''))
+          });
+          const m = /data-delta="(-?\d+)"/.exec(html);
+          if (m) { net += +m[1]; n++; }
+        }
+        if (l === 'account' || l === 'campaign') {
+          const kids = kidsOfRow(o, l);
+          for (const k of kids) visit(k, TREE[l], kids);
+        }
+      };
+      for (const a of accList || []) visit(a, 'account', accList);
+      return { net, n };
+    };
+    const prodAdviceCell = (accList) => {
+      const { net, n } = sumProdAdviceDelta(accList);
+      const tip = '假设下级建议全部执行后的日预算合计变化（ABO Adset / CBO Campaign 的 xx→yy，及有日预算的关停按 −当前预算）';
+      const badge = (txt, tone) => {
+        const col = { ok: 'color:#15803d;background:#dcfce7', warn: 'color:#a16207;background:#fef9c3', hold: 'color:#6b7280;background:#f3f4f6' }[tone] || 'color:#6b7280';
+        return `<span class="adv-badge" style="${col};padding:1px 6px;border-radius:6px;font-weight:600;display:inline-block;line-height:1.25;white-space:normal;text-align:center" title="${esc(tip)}">${txt}</span>`;
+      };
+      if (!n) return '<span class="dim">—</span>';
+      if (net === 0) return badge('总预算持平', 'hold');
+      if (net > 0) return badge('总预算 +' + fmt.money(net), 'ok');
+      return badge('总预算 −' + fmt.money(Math.abs(net)), 'warn');
+    };
+    const ovRow = (a, label, b, cls, advHtml) => {
       const d1 = d1Of(a, day);
       const d0 = okSp(a.spend) ? a.n[0] / (a.spend * FEE) : null;
       return `<tr class="ov-row ${cls}">
         <td class="tree-cell">${lamp(a.spend, a.pc)}<span class="txt"><b>${esc(label)}</b></span></td>
         <td>${bsCombo(a.spend, b)}</td>
         <td>${fmt.num(a.p0)}</td><td>${cppToday(a, day)}</td><td>${cpp3d(a, day)}</td>
-        <td>${ratePill(d0)}</td><td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td><td><span class="dim">—</span></td></tr>`;
+        <td>${ratePill(d0)}</td><td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td><td>${advHtml != null ? advHtml : '<span class="dim">—</span>'}</td></tr>`;
     };
     const ovAll = prodRows.reduce(addTo, z());
     const ovAllB = BUD.known ? (prodRows.reduce((t, a) => t + (prodBud[a.pid] || 0), 0) || null) : null;
@@ -1455,12 +1492,15 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       for (const pid of order) {
         const accs = top.filter(o => pOfAcc(o.acc) === pid);
         if (!accs.length) continue;
-        body += ovRow(prodSum[pid] || Object.assign(z(), { pid }), pName(pid), BUD.known ? (prodBud[pid] || null) : null, 'prod-head');
+        body += ovRow(prodSum[pid] || Object.assign(z(), { pid }), pName(pid), BUD.known ? (prodBud[pid] || null) : null, 'prod-head', prodAdviceCell(accs));
         body += renderRows('account', accs, 0);
       }
     } else body = renderRows('account', top, 0);
-    const overview = splitByProd ? ovRow(prodRows.reduce(addTo, z()), '全部产品', BUD.known ? (prodRows.reduce((t, a) => t + (prodBud[a.pid] || 0), 0) || null) : null, 'ov-all') : prodRows.map(a => ovRow(a, (PRODUCTS.find(x => x.id === a.pid) || {}).short || a.pid, BUD.known ? (prodBud[a.pid] || null) : null, '')).join('')
-      + (prodRows.length > 1 ? ovRow(ovAll, '全部产品', ovAllB, 'ov-all') : '');
+    const accsOfPid = pid => top.filter(o => pOfAcc(o.acc) === pid);
+    const overview = splitByProd
+      ? ovRow(prodRows.reduce(addTo, z()), '全部产品', BUD.known ? (prodRows.reduce((t, a) => t + (prodBud[a.pid] || 0), 0) || null) : null, 'ov-all', prodAdviceCell(top))
+      : prodRows.map(a => ovRow(a, (PRODUCTS.find(x => x.id === a.pid) || {}).short || a.pid, BUD.known ? (prodBud[a.pid] || null) : null, '', prodAdviceCell(accsOfPid(a.pid)))).join('')
+        + (prodRows.length > 1 ? ovRow(ovAll, '全部产品', ovAllB, 'ov-all', prodAdviceCell(top)) : '');
     let footB = null;
     for (const o of tgt) { const v = budOf(o, lv); if (v) footB = (footB || 0) + v; }
 
@@ -1605,9 +1645,10 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     const cppFall = v3 != null && v3 !== Infinity && vT != null && vT !== Infinity && vT < v3;
     const fmtCpp = v => v == null ? '—' : v === Infinity ? '无付费' : fmt.money(v);
     const nums = `今日花费 ${fmt.money(spT)} · 今日 D0 付费人 ${fmt.num(pyT)} · 今日 CPP ${fmtCpp(vT)} · D0 ${d0 == null ? '—' : fmt.pct(d0)} · 消耗进度 ${pace == null ? '—' : fmt.pct(pace, 0)}；近3日花费 ${fmt.money(sp3)} · 近3日 D0 付费人 ${fmt.num(py3)} · 近3日 CPP ${fmtCpp(v3)}`;
-    const mk = (txt, tone, why) => {
+    const mk = (txt, tone, why, delta) => {
       const col = { ok: 'color:#15803d;background:#dcfce7', warn: 'color:#a16207;background:#fef9c3', bad: 'color:#b91c1c;background:#fee2e2', hold: 'color:#374151;background:#f3f4f6' }[tone] || 'color:#6b7280';
-      return `<span class="adv-badge" style="${col};padding:1px 6px;border-radius:6px;font-weight:600;display:inline-block;line-height:1.25;white-space:normal;text-align:center" title="${esc(why + '｜' + nums)}">${txt}</span>`;
+      const dAttr = (delta != null && isFinite(delta)) ? ` data-delta="${Math.round(delta)}"` : '';
+      return `<span class="adv-badge"${dAttr} style="${col};padding:1px 6px;border-radius:6px;font-weight:600;display:inline-block;line-height:1.25;white-space:normal;text-align:center" title="${esc(why + '｜' + nums)}">${txt}</span>`;
     };
     const base = (bud != null && bud > 0) ? bud : null;
     const est = isCamp ? '基准=CBO Campaign 日预算（budget_tree 回溯到焦点日）' : '基准=Adset 当前日预算（budget_tree 回溯到焦点日）';
@@ -1618,13 +1659,18 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       if (pct > 0 && to <= from) to = Math.floor(from / 10) * 10 + 10;
       if (pct < 0 && to >= from) to = Math.max(0, Math.ceil(from / 10) * 10 - 10);
       const sign = pct > 0 ? '+' : '-';
-      return `${from}→${to}（${sign}${Math.abs(pct)}%）`;
+      return { text: `${from}→${to}（${sign}${Math.abs(pct)}%）`, delta: to - from };
+    };
+    /* 关停计入日预算净变化：ABO Adset / CBO Campaign 有日预算则 −当前；CBO Adset / Ad 不计入 */
+    const shutDelta = () => {
+      if (isAd || noChg || base == null) return null;
+      return -Math.round(base);
     };
     const mkChg = (pct, tone, why) => {
       if (noChg) return mk('保持', '', `CBO Adset 不调金额（预算在 Campaign 层）｜${why}`);
       const h = chgHtml(pct);
       if (h == null) return mk('无日预算，无法给金额', 'hold', `有加减建议但无 Adset 日预算，不推测金额｜${why}；${est}`);
-      return mk(h, tone, `${why}；${est}`);
+      return mk(h.text, tone, `${why}；${est}`, h.delta);
     };
     /* 疲劳：历史上这 Adset 跑过且预算抬过 → 关停时提示补同营好素材 */
     const fatigueLabel = () => {
@@ -1670,7 +1716,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     /* 1) 再观察仅：焦点=日历今天 且 今天有数据 且 北京时间<21:00；日历昨天永远不锁 */
     if (isLiveDay(day) && bjHour() < 21 && sp3 >= 100 && py3 === 0) {
       if (isAd) return mk(sibs && sibs.length ? '关停·挪给同组' : '关停', 'bad', '21:00 前例外：近3日花费 ≥ $100 且近3日 D0 付费人 = 0（不看仅今日 0）');
-      return mk(shutTxt('关停'), 'bad', '21:00 前例外：近3日花费 ≥ $100 且近3日 D0 付费人 = 0；差 Adset 关停，历史有量则提示疲劳换素材');
+      return mk(shutTxt('关停'), 'bad', '21:00 前例外：近3日花费 ≥ $100 且近3日 D0 付费人 = 0；差 Adset 关停，历史有量则提示疲劳换素材', shutDelta());
     }
     if (isLiveDay(day) && bjHour() < 21) return mk('再观察', '', '日历今天未到晚间（21:00），暂不给加减/关停建议');
 
@@ -1699,7 +1745,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
         ? '今日花费 ≥ $100 且今日 0 付费或今日 CPP > $70（D0 不作关停门槛）'
         : '近3日花费 ≥ $100 且今日 0 付费或今日 CPP > $70（今日花未满 $100 也关；不宜再等样本）';
       if (isAd) return mk(sibs && sibs.length ? '关停·挪给同组' : '关停', 'bad', whyKill);
-      return mk(shutTxt('关停'), 'bad', whyKill + '；差 Adset 关停，历史有量则提示疲劳换素材');
+      return mk(shutTxt('关停'), 'bad', whyKill + '；差 Adset 关停，历史有量则提示疲劳换素材', shutDelta());
     }
     /* 4) 样本不足（Billy）：仅近3日花 < $100 且近3日付费差；今日花多少不单独定样本不足 */
     const bad3 = py3 === 0 || v3 === Infinity || v3 == null || v3 > 70;
@@ -1715,7 +1761,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       if (d0v == null || d0v < 0.3) {
         if (isAd) return mk('保持', '', `今日 CPP $40–70 且 D0 差，父层应减 ${pcCut}%（打满不护航）；减预算只在 Adset，Ad 层只关停或保持`);
         /* Billy 2026-11-05：小预算（≤$50）+ 效果差 → 直接关停，不再减到 $30；>$50 仍 -15/-25 */
-        if (!noChg && base != null && base <= 50) return mk('关停', 'bad', `小预算（日预算 ${fmt.money(base)} ≤ $50）+ 今日 CPP $40–70 且 D0 ${d0v == null ? '无数据' : fmt.pct(d0v)} < 30% → 直接关停（不减档到 $30；消耗进度不作门槛）`);
+        if (!noChg && base != null && base <= 50) return mk('关停', 'bad', `小预算（日预算 ${fmt.money(base)} ≤ $50）+ 今日 CPP $40–70 且 D0 ${d0v == null ? '无数据' : fmt.pct(d0v)} < 30% → 直接关停（不减档到 $30；消耗进度不作门槛）`, shutDelta());
         return mkChg(-pcCut, 'warn', `今日 CPP $40–70 且 D0 ${d0v == null ? '无数据' : fmt.pct(d0v)} < 30% → 必须减（>$55 减25%，否则减15%）；消耗进度只作辅，打满不护航`);
       }
       /* D0≥30%：消耗进度才参与 */
