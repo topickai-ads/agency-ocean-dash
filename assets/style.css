@@ -1005,7 +1005,10 @@ table.d.drill-t { table-layout: fixed; width: 100%; min-width: 1080px; }
 table.d.drill-t col.c-name { width: auto; }
 table.d.drill-t col.c-spend { width: 96px; }
 table.d.drill-t col.c-d0 { width: 96px; }
-table.d.drill-t col.c-adv { width: 104px; }
+table.d.drill-t col.c-adv { width: 150px; }
+table.d.drill-t col.c-read { width: 210px; }
+table.d.drill-t .adv-badge { white-space: normal !important; display: inline-block; line-height: 1.35; }
+table.d.drill-t .read-txt { white-space: normal; display: inline-block; line-height: 1.35; }
 table.d.drill-t col.c-rate { width: 118px; }
 table.d.drill-t col.c-rate1 { width: 96px; }
 table.d.drill-t col.c-d1 { width: 96px; }
