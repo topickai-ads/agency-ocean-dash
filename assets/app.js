@@ -69,7 +69,7 @@
   function dayFreshTip(day) {
     if (!day || day !== TODAY) return '';
     const hmm = dataUntilHmm();
-    return hmm ? `数据截至 ${hmm}，随后还会再刷新` : '数据可能未刷完，随后还会再刷新';
+    return hmm ? `截至 ${hmm}（未完）` : '未刷完';
   }
 
   const state = {
@@ -1568,11 +1568,12 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
   /* 调整建议（Billy 2026-11-05：今日 CPP 主、近3日辅；D0 率不做门槛，不跟代理比） */
   function campBudgetKind(acc, camp) {
+    if (!camp) return null;
     const det = (M.budget_detail || {})[acc] || [];
-    if (!det.length || !camp) return null;
     const hit = det.find(d => d && d.camp === camp);
-    if (!hit) return null;
-    const k = String(hit.kind || '');
+    /* 跨日刷新时 budget_detail 可能为空 → 回退 budget_tree 的 k，否则建议列整列变「—」 */
+    const tk = ((((M.budget_tree || {})[acc] || {}).c || {})[camp] || {}).k;
+    const k = String((hit && hit.kind) || tk || '');
     if (k.indexOf('CBO') === 0) return 'CBO';
     if (k.indexOf('ABO') === 0) return 'ABO';
     return null;
@@ -1925,7 +1926,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     (slot || main).innerHTML = `
       <section class="sect">
         ${sec('01', '四层明细',
-          `账号 → Campaign → Adset → Ad，只列当天在投的 · 日期跟顶部筛选 · 行首灯看今日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且付费差 灰；近3日作辅）`,
+          `四层 · 当天在投 · 灯=今日CPP（≤40绿 / 40–70黄 / >70或花≥100零付费红 / 花<100灰）`,
           `${fmt.md(day)}${isLiveDay(day) ? ' 盘中' : ''}${(() => { const t = dayFreshTip(day); return t ? ' · ' + t : ''; })()} · 花费 ${fmt.money((() => { let v = 0; for (const r of ALL) if (r.lv === 'campaign' && r.d === day && match(r, {})) v += r.spend; return v; })())}`)}
         <article class="card">
           <div class="drill-ctrl">
