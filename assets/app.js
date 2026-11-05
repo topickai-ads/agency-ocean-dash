@@ -1333,7 +1333,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       return `<tr class="lv-${rowLv} d${depth} ${isFocus ? 'is-focus' : ''}" data-lv="${rowLv}" data-key="${encodeURIComponent(key)}" data-node="${encodeURIComponent(o.key)}" data-name="${esc(label)}" data-extra="${esc(extra || '')}">
         <td class="tree-cell" style="padding-left:${10 + Math.min(depth, 3) * 12}px">
           ${lamp(o.spend, o.pc)}${caret}
-          <span class="txt${(onOf(o, rowLv) || {}).on === false ? ' is-off' : ''}" title="${esc(label)}${(() => { const s = onOf(o, rowLv); return s ? ' · ' + esc(s.tip) : ''; })()}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>${stBadge(o, rowLv)}
+          <span class="txt${(onOf(o, rowLv) || {}).on === false ? ' is-off' : ''}" title="${esc(label)}${(() => { const s = onOf(o, rowLv); return s ? ' · ' + esc(s.tip) : ''; })()}">${strong ? `<b>${esc(label)}</b>` : esc(label)}${extra ? `<span class="dim" style="font-size:11px"> · ${esc(extra)}</span>` : ''}</span>${(rowLv === 'campaign' || rowLv === 'adset') ? (k => k ? `<span class="kind-tag kind-${k.toLowerCase()}" title="${k === 'CBO' ? 'Campaign 预算（CBO）' : 'Adset 预算（ABO）'}">${k}</span>` : '')(campBudgetKind(o.acc, o.camp)) : ''}${stBadge(o, rowLv)}
         </td>
         <td>${bsCombo(o.spend, bud, (o.spend3 || 0) < 100)}</td>
         <td class="${(o.payers3 || 0) < 5 ? 'dim' : ''}">${fmt.num(o.p0)}</td>
@@ -1341,8 +1341,9 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
         <td>${cpp3d(o, day)}</td>
         <td>${ratePill(o.d0)}${o.est ? '<i class="est" title="这天没有这一条的回收归属，按花费分摊">估</i>' : ''}</td>
         <td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td>
-        <td>${(rowLv === 'adset' || rowLv === 'ad') ? adviceCell(o, day, {
+        <td>${(rowLv === 'campaign' || rowLv === 'adset' || rowLv === 'ad') ? adviceCell(o, day, {
           isAd: rowLv === 'ad',
+          isCamp: rowLv === 'campaign',
           sibs: (sibs || []).filter(x => x !== o),
           bud,
           adsOf: aset => kidsOf('ad').filter(r => r.acc === aset.acc && r.camp === aset.camp && (r.ads || '') === (aset.ads || ''))
@@ -1548,11 +1549,14 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     const sibs = opts.sibs || null;
     const bud = opts.bud;
     const adsOf = opts.adsOf;
+    const isCamp = !!opts.isCamp;
     const bk = campBudgetKind(o.acc, o.camp);
-    if (bk !== 'ABO') {
-      const tip = bk === 'CBO' ? 'CBO 不套 ABO 加减规则' : '未知预算类型，暂不给建议';
+    /* Billy 2026-11-05 定稿：ABO=Adset 加减/Ad 关停保持/Campaign —；CBO=Campaign 加减/Adset 好保持差关停/Ad 关停保持 */
+    if (!bk || (bk === 'ABO' && isCamp)) {
+      const tip = bk ? 'ABO 加减在 Adset 层' : '未知预算类型，暂不给建议';
       return `<span class="dim" title="${esc(tip)}">—</span>`;
     }
+    const noChg = bk === 'CBO' && !isCamp && !isAd; /* CBO Adset：不出金额 */
     const spT = o.spend || 0, pyT = o.pc || 0, vT = cppOf(spT, pyT);
     const sp3 = o.spend3 || 0, py3 = o.payers3 || 0, v3 = cppOf(sp3, py3);
     const d0 = o.d0;
@@ -1567,7 +1571,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       return `<span class="adv-badge" style="${col};padding:1px 6px;border-radius:6px;font-weight:600;display:inline-block;line-height:1.25;white-space:normal;text-align:center" title="${esc(why + '｜' + nums)}">${txt}</span>`;
     };
     const base = (bud != null && bud > 0) ? bud : null;
-    const est = '基准=Adset 当前日预算（budget_tree 回溯到焦点日）';
+    const est = isCamp ? '基准=CBO Campaign 日预算（budget_tree 回溯到焦点日）' : '基准=Adset 当前日预算（budget_tree 回溯到焦点日）';
     const chgHtml = (pct) => {
       if (base == null) return null;
       const from = Math.round(base);
@@ -1578,13 +1582,14 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       return `${from}→${to}（${sign}${Math.abs(pct)}%）`;
     };
     const mkChg = (pct, tone, why) => {
+      if (noChg) return mk('保持', '', `CBO Adset 不调金额（预算在 Campaign 层）｜${why}`);
       const h = chgHtml(pct);
       if (h == null) return mk('无日预算，无法给金额', 'hold', `有加减建议但无 Adset 日预算，不推测金额｜${why}；${est}`);
       return mk(h, tone, `${why}；${est}`);
     };
     /* 疲劳：历史上这 Adset 跑过且预算抬过 → 关停时提示补同营好素材 */
     const fatigueLabel = () => {
-      if (isAd) return null;
+      if (isAd || isCamp) return null;
       const histOk = py3 >= 3 && ((v3 != null && v3 !== Infinity && v3 <= 50) || sp3 >= 100)
         && ((bud != null && bud >= 80) || sp3 >= 100);
       if (!histOk) return null;

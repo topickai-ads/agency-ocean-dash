@@ -1263,3 +1263,6 @@ table.d.drill-t td:has(> .bsc), table.d.drill-t th:nth-child(2) { text-align: le
 .bsc { justify-content: flex-start; }
 .bsc .pace-bar { width: 56px; height: 8px; background: #cfd6e2; border-radius: 3px; box-shadow: inset 0 0 0 1px #b7c0d0; overflow: hidden; flex: none; }
 .bsc .pace-bar i { background: #3b6fd8; border-radius: 3px; }
+.kind-tag{display:inline-block;margin-left:6px;padding:0 5px;border-radius:4px;font-size:10px;font-weight:600;line-height:16px;vertical-align:middle;letter-spacing:.3px}
+.kind-tag.kind-abo{color:#6b7280;background:#f3f4f6}
+.kind-tag.kind-cbo{color:#1d4ed8;background:#e0ecff}
