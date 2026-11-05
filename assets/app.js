@@ -1283,7 +1283,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
         <td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td>
         <td${pc(day, 3)}>${dkCell(dkOf(o.n, o.spend, day, 3))}</td>
         <td>${readCell(o, day, d1)}</td>
-        <td>${adviceCell(o, day, rowLv === 'ad' ? (sibs || []).filter(x => x !== o) : null)}</td>
+        <td>${rowLv === 'adset' ? adviceCell(o, day) : '<span class="dim">—</span>'}</td>
         <td class="dim">${fmt.num(o.p0)}</td>
         <td>${fmt.money(o.spend)}</td>
         <td>${fmt.money(o.n[0] || 0)}</td>
@@ -1414,7 +1414,8 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     const tip = `今日CPP ${f(vt)} · 近3日CPP ${f(v3)} · D0 率 ${o.d0 == null ? '—' : Math.round(o.d0 * 100) + '%'}${rec.length ? ' · ' + rec.join(' · ') : ''}。D0 率相对 50% 仅作描述，不作决策门槛。`;
     return `<span class="read-txt" style="font-size:12px;color:#374151" title="${esc(tip)}">${esc(short)}</span>`;
   }
-  function adviceCell(o, day, sibs) {
+  function adviceCell(o, day) {
+    /* 只在 Adset 层给调整建议；Account / Campaign / Ad 显示 — */
     const sp = o.spend3 || 0, py = o.payers3 || 0, v = cppOf(sp, py);
     const nums = `近3日花费 ${fmt.money(sp)} · 近3日 D0 付费人 ${fmt.num(py)} · 近3日 CPP ${v == null ? '—' : v === Infinity ? '无付费' : fmt.money(v)}`;
     const mk = (txt, tone, why) => {
@@ -1424,16 +1425,6 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     if (day === TODAY && bjHour() < 21) return mk('再观察', '', '焦点日未到晚间（21:00），暂不给加减/关停建议');
     if (sp < 100 && (py === 0 || v === Infinity || v == null || v > 70)) return mk('样本不足', '', '近3日花费 < $100，样本不足以判断');
     if (sp >= 100 && (py === 0 || v === Infinity || v > 70)) return mk('建议关停', 'bad', 'R1：近3日花费 ≥ $100 且 0 付费或 CPP > $70');
-    if (sibs && sibs.length) {
-      const top = sibs.reduce((m, x) => ((x.spend3 || 0) > (m.spend3 || 0) ? x : m), sibs[0]);
-      const ts = top.spend3 || 0, tv = cppOf(ts, top.payers3 || 0);
-      const topStrong = tv != null && tv !== Infinity && tv <= 40 && ts >= 100;
-      const vt = cppOf(o.spend || 0, o.pc || 0);
-      const okToday = vt != null && vt !== Infinity && vt <= 40;
-      const sNote = `同组「${top.ad || '另一条'}」近3日花费 ${fmt.money(ts)}，CPP ${tv == null ? '—' : tv === Infinity ? '无付费' : fmt.money(tv)}`;
-      if (okToday && ts >= 100 && sp < ts * 0.2) return mk('虽然数据好，但预算分不到它，建议关停', 'bad', `今日CPP ≤ $40，但近3日花费不到同组主力的 20%（预算被吃）｜${sNote}`);
-      if (topStrong && v != null && (v === Infinity || v > 40)) return mk('建议关停（同组更好素材在吃预算）', 'bad', `本条近3日 CPP > $40，同组更好素材 CPP ≤ $40 且在吃预算｜${sNote}`);
-    }
     if (v > 40 && v <= 70) return mk('建议减预算', 'warn', 'R2：近3日 CPP 在 $40–70');
     if (py >= 5) return mk('可考虑加预算', 'ok', `R3：近3日 CPP ≤ $40，近3日 D0 付费人 ≥ 5（当前 ${py} 人）`);
     return mk('保持', 'hold', `R3：近3日 CPP ≤ $40，但付费人 < 5（当前 ${py} 人），暂不写可加`);
@@ -1469,7 +1460,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
           <th colspan="10">${fmt.md(day)} 安装 cohort</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。关停判断看本列。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。灯与红黄绿筛选只看本列。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th${pc(day, 3, 'pc-top')} title="累计到安装日+3 的净回收 ÷ 花费×1.05">D3 率${provTag(day, 3)}</th><th>数据解读${tipI('综合今日 CPP / 近3日 CPP / D0 率（D1·D3 若已到）的一句话解读；悬停看数字。D0 率相对 50% 仅作描述参考，不作决策门槛。')}</th><th>调整建议${tipI('按 density_kill_rules（近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人）：焦点日为今天且北京时间未到 21:00 →再观察；花费<$100 且无付费/CPP>$70 →样本不足；花费≥$100 且 0 付费或 CPP>$70 →建议关停；$40–70 →建议减预算；≤$40 且近3日 D0 付费人≥5 →可考虑加预算，否则保持。Ad 层同组比较：今日 CPP 好但近3日花费不到同组主力 20% →「虽然数据好，但预算分不到它，建议关停」；本条 CPP>$40 而同组主力 CPP≤$40 且花费≥$100 →「建议关停（同组更好素材在吃预算）」（先于减预算判断）。D0 率不做门槛，不跟代理比。')}</th><th>D0 付费人</th><th>花费</th><th>D0 净${tipI('D0 净 = 安装当天净回收金额（未÷花费）。')}</th>
+          <th>账号 / Campaign / Adset / Ad</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。关停判断看本列。密度带：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。灯与红黄绿筛选只看本列。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th${pc(day, 3, 'pc-top')} title="累计到安装日+3 的净回收 ÷ 花费×1.05">D3 率${provTag(day, 3)}</th><th>数据解读${tipI('综合今日 CPP / 近3日 CPP / D0 率（D1·D3 若已到）的一句话解读；悬停看数字。D0 率相对 50% 仅作描述参考，不作决策门槛。')}</th><th>调整建议${tipI('仅 Adset 层给出调整建议（Account / Campaign / Ad 不建议）。按 density_kill_rules（近3日 CPP）：焦点日为今天且北京时间未到 21:00 →再观察；花费<$100 且无付费/CPP>$70 →样本不足；花费≥$100 且 0 付费或 CPP>$70 →建议关停；$40–70 →建议减预算；≤$40 且近3日 D0 付费人≥5 →可考虑加预算，否则保持。D0 率不做门槛，不跟代理比。')}</th><th>D0 付费人</th><th>花费</th><th>D0 净${tipI('D0 净 = 安装当天净回收金额（未÷花费）。')}</th>
         </tr>
       </thead>
       <tbody id="drillRows">${c.body}</tbody>
