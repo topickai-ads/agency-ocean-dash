@@ -1438,7 +1438,27 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
   const TF_NAME = { bad: '红', warn: '黄', ok: '绿' };
   /* 表头带圈 i：桌面 hover / 可聚焦；原生 title 手机长按也常能出 */
-  const tipI = (txt) => `<i class="tip-i" title="${esc(txt)}" tabindex="0" aria-label="说明">i</i>`;
+  const tipI = (txt) => `<i class="tip-i" data-tip="${esc(txt)}" tabindex="0" aria-label="${esc(txt)}">i</i>`;
+  /* 自绘浮层：原生 title 延迟约 1s，这里 hover/聚焦 ~60ms 内出现；挂 body 防被表格裁切 */
+  (function initTip() {
+    let pop = null, tm = null;
+    const show = el => {
+      if (!pop) { pop = document.createElement('div'); pop.className = 'tip-pop'; document.body.appendChild(pop); }
+      pop.textContent = el.getAttribute('data-tip');
+      pop.style.display = 'block';
+      const r = el.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+      let x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), window.innerWidth - w - 8);
+      let y = r.bottom + 6; if (y + h > window.innerHeight - 8) y = Math.max(8, r.top - h - 6);
+      pop.style.left = x + 'px'; pop.style.top = y + 'px';
+    };
+    const hide = () => { clearTimeout(tm); if (pop) pop.style.display = 'none'; };
+    const on = e => { const el = e.target.closest && e.target.closest('.tip-i[data-tip]'); if (!el) return; clearTimeout(tm); tm = setTimeout(() => show(el), 60); };
+    const off = e => { const el = e.target.closest && e.target.closest('.tip-i[data-tip]'); if (el) hide(); };
+    document.addEventListener('mouseover', on); document.addEventListener('focusin', on);
+    document.addEventListener('mouseout', off); document.addEventListener('focusout', off);
+    document.addEventListener('touchstart', e => { const el = e.target.closest && e.target.closest('.tip-i[data-tip]'); if (el) show(el); else hide(); }, { passive: true });
+    window.addEventListener('scroll', hide, true);
+  })();
 
   /* CPP = 花费 ÷ 窗口付费人（装日 cohort；全市场一律 D0）。
      密度带（绝对线，禁止跟代理比）：≤$40 好 / $40–70 边缘 / >$70 或窗内 0 付费且花够($100) 差 */
@@ -1530,7 +1550,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     return mk('保持', '', `R3：近3日 CPP ≤ $40，但付费人 < 5（当前 ${py} 人），暂不写可加`);
   }
   const budTd = b => b ? fmt.money(b) : '<span class="dim">—</span>';
-  const ratioTd = (sp, b) => b ? `<b>${fmt.pct((sp || 0) / b, 0)}</b>` : '<span class="dim">—</span>';
+  const ratioTd = (sp, b) => paceCell(sp || 0, b);
   function drillFootHTML(c) {
     const f1 = d1Of({ spend: c.total.spend, n: [c.total.n1, 0] }, c.day);
     return `<tr>
@@ -1656,16 +1676,6 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
 `;
     main.innerHTML = state.tab === 'recovery' ? recHTML : `
-      <section class="sect">
-        ${sec('01', '预算 · 消耗 · 回收率',
-          `每日花费走势${IS_AG ? '' : ' · 含自投 zt'} · 预算 / 消耗比例已并入下方四层明细（顶部为分产品总览）`,
-          budFocus
-            ? `<b>${fmt.money(cur.spendA)}</b> / ${fmt.money(budFocus)} · 消耗比例 ${fmt.pct(usedNow, 0)}`
-            : `<b>${fmt.money(cur.spendA)}</b> 已花 · 当日预算未记账`)}
-        <div class="row-bs one">
-          ${spendTrendCard(wd, focusIdx, cur)}
-        </div>
-      </section>
       <div id="drillSlot"></div>
 
     `;
@@ -1691,7 +1701,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
     (slot || main).innerHTML = `
       <section class="sect">
-        ${sec('02', '四层明细',
+        ${sec('01', '四层明细',
           `账号 → Campaign → Adset → Ad，只列当天在投的 · 日期跟顶部筛选 · 行首灯看近3日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 花<$100且付费差 灰）`,
           `${fmt.md(day)}${day === TODAY ? ' 盘中' : ''} · 花费 ${fmt.money((() => { let v = 0; for (const r of ALL) if (r.lv === 'campaign' && r.d === day && match(r, {})) v += r.spend; return v; })())}`)}
         <article class="card">

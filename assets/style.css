@@ -1243,3 +1243,9 @@ table.d.drill-t tbody.ov-body tr.ov-all td { background: #eef2f9; }
 table.d.drill-t tbody.ov-body tr:last-child td { border-bottom: 2px solid #c9d2e3; }
 table.d.drill-t { min-width: 1240px; }
 @media (max-width: 860px) { table.d.drill-t { min-width: 960px; } table.d.drill-t col.c-ratio { width: 66px; } }
+
+/* 表头 i 自绘浮层（即时出现） */
+.tip-pop { position: fixed; z-index: 9999; display: none; max-width: 340px; padding: 8px 10px; border-radius: 8px;
+  background: #1f2937; color: #f9fafb; font-size: 12px; line-height: 1.5; font-weight: 400; white-space: normal;
+  box-shadow: 0 6px 20px rgba(0,0,0,.18); pointer-events: none; text-align: left; }
+table.d.drill-t col.c-ratio { width: 104px; }
