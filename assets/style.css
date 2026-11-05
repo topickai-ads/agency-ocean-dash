@@ -1005,8 +1005,13 @@ table.d.drill-t { table-layout: fixed; width: 100%; min-width: 1080px; }
 table.d.drill-t col.c-name { width: auto; }
 table.d.drill-t col.c-spend { width: 96px; }
 table.d.drill-t col.c-d0 { width: 96px; }
-table.d.drill-t col.c-adv { width: 190px; }
-table.d.drill-t col.c-read { width: 260px; }
+table.d.drill-t col.c-adv { width: 150px; }
+table.d.drill-t col.c-read { width: 168px; }
+/* 解读与建议贴紧：收窄两列相邻 padding */
+table.d.drill-t th.th-read,
+table.d.drill-t td.td-read { padding-right: 4px; }
+table.d.drill-t th.th-read + th,
+table.d.drill-t td.td-read + td { padding-left: 4px; }
 table.d.drill-t td:has(.adv-badge),
 table.d.drill-t td:has(.read-txt),
 table.d.drill-t td.td-read { white-space: normal; vertical-align: middle; }
