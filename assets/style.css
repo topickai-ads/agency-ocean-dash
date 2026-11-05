@@ -1249,3 +1249,4 @@ table.d.drill-t { min-width: 1240px; }
   background: #1f2937; color: #f9fafb; font-size: 12px; line-height: 1.5; font-weight: 400; white-space: normal;
   box-shadow: 0 6px 20px rgba(0,0,0,.18); pointer-events: none; text-align: left; }
 table.d.drill-t col.c-ratio { width: 104px; }
+table.d.drill-t tbody#drillRows tr.prod-head td { background: #eef2f9; border-top: 2px solid #c9d2e3; font-size: 1.02em; }

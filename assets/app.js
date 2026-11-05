@@ -1383,7 +1383,23 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     };
     const ovAll = prodRows.reduce(addTo, z());
     const ovAllB = BUD.known ? (prodRows.reduce((t, a) => t + (prodBud[a.pid] || 0), 0) || null) : null;
-    const overview = prodRows.map(a => ovRow(a, (PRODUCTS.find(x => x.id === a.pid) || {}).short || a.pid, BUD.known ? (prodBud[a.pid] || null) : null, '')).join('')
+    const pName = pid => (PRODUCTS.find(x => x.id === pid) || {}).short || pid;
+    const pOfAcc = acc => (acctMeta(acc) || {}).product || accP[acc] || '其他';
+    /* 全部产品 + 多产品：四层明细按产品分段（产品行 → 该产品下的账户树），顶部只留「全部产品」合计 */
+    const splitByProd = state.product === 'all' && prodRows.length > 1;
+    let body;
+    if (splitByProd) {
+      body = '';
+      const order = prodRows.map(a => a.pid);
+      top.forEach(o => { const p = pOfAcc(o.acc); if (!order.includes(p)) order.push(p); });
+      for (const pid of order) {
+        const accs = top.filter(o => pOfAcc(o.acc) === pid);
+        if (!accs.length) continue;
+        body += ovRow(prodSum[pid] || Object.assign(z(), { pid }), pName(pid), BUD.known ? (prodBud[pid] || null) : null, 'prod-head');
+        body += renderRows('account', accs, 0);
+      }
+    } else body = renderRows('account', top, 0);
+    const overview = splitByProd ? ovRow(prodRows.reduce(addTo, z()), '全部产品', BUD.known ? (prodRows.reduce((t, a) => t + (prodBud[a.pid] || 0), 0) || null) : null, 'ov-all') : prodRows.map(a => ovRow(a, (PRODUCTS.find(x => x.id === a.pid) || {}).short || a.pid, BUD.known ? (prodBud[a.pid] || null) : null, '')).join('')
       + (prodRows.length > 1 ? ovRow(ovAll, '全部产品', ovAllB, 'ov-all') : '');
     let footB = null;
     for (const o of tgt) { const v = budOf(o, lv); if (v) footB = (footB || 0) + v; }
@@ -1391,7 +1407,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     return {
       lv, top: tgt, tf: TF, day, overview, footB,
       nameW: Math.ceil(measureAll('account', top, 0)),
-      body: renderRows('account', top, 0),
+      body,
       total,
       rate: okSp(total.spend) ? (total.n0 / (total.spend * FEE)) : null
     };
