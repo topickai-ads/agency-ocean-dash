@@ -1391,6 +1391,10 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       return { net, n };
     };
     const prodAdviceCell = (accList) => {
+      /* Billy 2026-11-06：今天且北京 <21:00，账号/产品行不出「若都照做 总预算」加减；昨天不受影响；Adset/Campaign/Ad 规则不动 */
+      if (isLiveDay(day) && bjHour() < 21) {
+        return '<span class="dim" title="日历今天未到 21:00，账号/产品总预算建议晚间再出">21:00 后出</span>';
+      }
       const { net, n } = sumProdAdviceDelta(accList);
       const tip = '假设都照做后的日预算净变化：只计 ABO Adset + CBO Campaign 的 xx→yy 与关停（−当前日预算）。Ad 关停、CBO Adset 关停不动日预算，不计入；ABO Campaign 无独立日预算，不计入。加减关停不能按条数或绝对值相加，要按拥有日预算的那一层净合计。';
       const badge = (txt, tone) => {
