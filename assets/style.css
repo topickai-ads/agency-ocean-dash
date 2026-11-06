@@ -1023,13 +1023,9 @@ table.d.drill-t col.c-d1 { width: 96px; }
 table.d.drill-t col.c-payers { width: 76px; }
 table.d.drill-t col.c-cpa { width: 88px; }
 table.d.drill-t col.c-cpp { width: 84px; }
-table.d.drill-t col.c-live { width: 118px; }
+table.d.drill-t col.c-live { width: 64px; }
 table.d.drill-t td.live-td { vertical-align: middle; padding-top: 4px; padding-bottom: 4px; }
-table.d.drill-t .live-cell { display: flex; flex-direction: row; align-items: center; gap: 6px; line-height: 1.2; }
 table.d.drill-t .live-age { font-size: calc(12px * var(--fs-scale)); font-weight: 600; color: var(--ink-2); white-space: nowrap; }
-table.d.drill-t .live-age small { display: block; font-size: 10px; font-weight: 400; color: var(--ink-3); }
-table.d.drill-t .cpp-spark { display: block; line-height: 0; }
-table.d.drill-t .cpp-spark .spark { display: block; }
 table.d.drill-t col.c-spark { width: 86px; }
 table.d.drill-t td.tree-cell {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -1059,7 +1055,7 @@ table.d.drill-t .spark-cell { padding-left: 8px; padding-right: 10px; }
   table.d.drill-t col.c-payers { width: 64px; }
   table.d.drill-t col.c-cpa { width: 72px; }
   table.d.drill-t col.c-cpp { width: 72px; }
-  table.d.drill-t col.c-live { width: 96px; }
+  table.d.drill-t col.c-live { width: 56px; }
   table.d.drill-t col.c-spark { width: 70px; }
   table.d.drill-t .spark-cell { padding-left: 4px; padding-right: 6px; }
 

@@ -1242,72 +1242,84 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     return `<article class="card">${rows ? `<div class="issue-list">${rows}</div>` : '<div class="empty">当前窗口没有需要处理的问题</div>'}</article>`;
   }
 
-  /* ---------------- 上线第 N 天 + 近 7 日 CPP 火花（仅 Adset/Ad） ---------------- */
-  /* Meta created_time → Asia/Shanghai 日历日 / 展示串；第 1 天 = 创建当日 */
+  /* ---------------- 上线第 N 天（仅 Adset/Ad）+ 上线以来 CPP ---------------- */
+  /* Meta created_time → Asia/Shanghai 日历日；第 1 天 = 创建当日 */
   function parseMetaCt(iso) {
     if (!iso) return null;
     const d = new Date(String(iso).replace('+0000', '+00:00'));
     if (!isFinite(d.getTime())) return null;
-    const day = bjDate(d); /* YYYY-MM-DD in Asia/Shanghai */
-    const hm = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
-    const tip = (day.slice(0, 4) === CAL_TODAY.slice(0, 4) ? day.slice(5) : day) + ' ' + hm;
-    return { day, tip };
+    return { day: bjDate(d), tip: iso };
   }
   function createdOf(o, l) {
     const STM = (D && D.meta && D.meta.status) || null;
-    if (!STM || !o || (l !== 'adset' && l !== 'ad')) return null;
+    if (!STM || !o) return null;
     const m = STM[o.acc];
     if (!m) return null;
     const SEP = '\x01';
     if (l === 'adset') return parseMetaCt((m.sc || {})[(o.camp || '') + SEP + (o.ads || '')]);
-    return parseMetaCt((m.dc || {})[(o.camp || '') + SEP + (o.ads || '') + SEP + (o.ad || '')]);
+    if (l === 'ad') return parseMetaCt((m.dc || {})[(o.camp || '') + SEP + (o.ads || '') + SEP + (o.ad || '')]);
+    if (l === 'campaign') return parseMetaCt((m.cc || {})[o.camp || '']);
+    if (l === 'account') {
+      /* 账号：取该账户下最早 Campaign created_time */
+      let best = null;
+      for (const iso of Object.values(m.cc || {})) {
+        const ct = parseMetaCt(iso);
+        if (ct && (!best || ct.day < best.day)) best = ct;
+      }
+      return best;
+    }
+    return null;
   }
   function liveAgeParts(o, l, focusDay) {
     const ct = createdOf(o, l);
     if (!ct) return null;
     const n = dayDiff(ct.day, focusDay) + 1;
-    if (n < 1) return { n: 1, ct };
-    return { n, ct };
+    return { n: n < 1 ? 1 : n, ct };
   }
-  /* 近 7 个上海自然日（焦点日为末日）；若有上线日且更晚，从创建日起算 */
-  function cppSparkDays(focusDay, createdDay) {
-    const days = [];
-    for (let i = 6; i >= 0; i--) days.push(addDays(focusDay, -i));
-    if (createdDay) {
-      if (createdDay > focusDay) return [];
-      const i0 = days.findIndex(d => d >= createdDay);
-      return i0 < 0 ? days : days.slice(i0);
-    }
-    return days;
-  }
-  function cppSparkCell(o, focusDay, l) {
-    if (l !== 'adset' && l !== 'ad') return '<span class="dim">—</span>';
-    const ct = createdOf(o, l);
-    const days = cppSparkDays(focusDay, ct && ct.day);
-    if (!days.length) return '<span class="dim">—</span>';
-    const by = o.byWeek || o.byDay || new Map();
-    const vals = [], bad = [], tips = [];
-    days.forEach((d, i) => {
-      const dd = by.get(d) || { spend: 0, p0: 0 };
-      const sp = dd.spend || 0, py = dd.p0 || 0;
-      let cpp = null;
-      if (py > 0) cpp = sp / py;
-      else if (sp > 0) bad.push(i);
-      vals.push(cpp);
-      tips.push(`${fmt.md(d)} 花 ${fmt.money(sp)} · D0 付费 ${fmt.num(py)} · CPP ${cpp != null ? fmt.money(cpp) : (sp > 0 ? '无付费' : '—')}`);
-    });
-    const svg = sparkSvg(vals, { w: 56, h: 16, color: '#64748b', badDots: bad });
-    return `<span class="cpp-spark" title="${esc(['近' + days.length + '日每日 CPP（花÷D0付费人）'].concat(tips).join('\n'))}">${svg}</span>`;
-  }
+  /* 仅第 N 天；时刻与 CPP 火花已撤 */
   function liveCell(o, l, focusDay) {
     if (l !== 'adset' && l !== 'ad') return '<span class="dim"></span>';
     const age = liveAgeParts(o, l, focusDay);
-    const spark = cppSparkCell(o, focusDay, l);
-    if (!age) {
-      return `<div class="live-cell"><span class="dim" title="尚无 Meta created_time">—</span>${spark}</div>`;
+    if (!age) return '<span class="dim" title="尚无 Meta created_time">—</span>';
+    const tip = `上线第 ${age.n} 天（Meta created_time 上海日历 · 创建当日=第1天 · 相对焦点日）`;
+    return `<span class="live-age" title="${esc(tip)}">第${age.n}天</span>`;
+  }
+  function lifePreOf(o, l) {
+    const LP = (M && M.life_pre) || null;
+    if (!LP || !o) return { sp: 0, p0: 0 };
+    const acc = LP[o.acc];
+    if (!acc) return { sp: 0, p0: 0 };
+    const SEP = '\x01';
+    let slot = null;
+    if (l === 'campaign') slot = (acc.c || {})[o.camp || ''];
+    else if (l === 'adset') slot = (acc.s || {})[(o.camp || '') + SEP + (o.ads || '')];
+    else if (l === 'ad') slot = (acc.d || {})[(o.camp || '') + SEP + (o.ads || '') + SEP + (o.ad || '')];
+    return slot ? { sp: slot.sp || 0, p0: slot.p0 || 0 } : { sp: 0, p0: 0 };
+  }
+  /* 上线以来：max(created, life_from) … focus；代理窗前缀 life_pre 补窗口前 */
+  function lifeRangeOf(o, l, focusDay) {
+    const ct = createdOf(o, l);
+    const lifeFrom = (M && M.life_from) || (DATES[0] || focusDay);
+    const from = ct && ct.day > lifeFrom ? ct.day : lifeFrom;
+    return { from, ct };
+  }
+  function lifeTotals(o, l, focusDay) {
+    const { from } = lifeRangeOf(o, l, focusDay);
+    const preBefore = (M && M.life_pre_before) || null;
+    const pre = lifePreOf(o, l);
+    let sp = 0, p0 = 0;
+    /* 前缀仅计入 created…preBefore；窗口内用 byLife */
+    if (preBefore && from < preBefore) {
+      sp += pre.sp; p0 += pre.p0;
     }
-    const tip = `上线 ${age.ct.tip}（Meta created_time · 上海）· 第 ${age.n} 天（创建当日=第1天）`;
-    return `<div class="live-cell" title="${esc(tip)}"><span class="live-age">第${age.n}天<small>${esc(age.ct.tip)}</small></span>${spark}</div>`;
+    const by = o.byLife || o.byDay || new Map();
+    for (const [d, dd] of by) {
+      if (d < from || d > focusDay) continue;
+      if (preBefore && d < preBefore) continue; /* 已在前缀 */
+      sp += dd.spend || 0;
+      p0 += dd.p0 || 0;
+    }
+    return { sp, p0, from };
   }
 
   /* ---------------- 下钻：账号 → campaign → adset → ad ---------------- */
@@ -1320,18 +1332,17 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     const kidsOf = l => {
       if (!cache[l]) {
         cache[l] = groupRows(l, [day], { withQ: true });
-        /* CPP：焦点日为末日的近 3 个自然日（含焦点日），缺日按 0 */
+        /* 近 3 日：仅供调整建议内部规则（21:00 例外 / 样本不足 / CPP 降等），列上已不展示 */
         const w3 = [addDays(day, -2), addDays(day, -1), day];
         const m3 = new Map(groupRows(l, w3, { withQ: true }).map(x => [x.key, x]));
-        /* 近 7 日 byDay 给 CPP 火花（按 id 聚合；仅 Adset/Ad 用） */
-        const w7 = [];
-        for (let i = 6; i >= 0; i--) w7.push(addDays(day, -i));
-        const m7 = (l === 'adset' || l === 'ad')
-          ? new Map(groupRows(l, w7, { withQ: true }).map(x => [x.key, x]))
-          : null;
+        /* 上线以来 CPP：焦点日及之前的明细 byDay（代理窗前缀见 M.life_pre） */
+        const lifeDates = DATES.filter(d => d <= day);
+        const mLife = new Map(groupRows(l, lifeDates, { withQ: true }).map(x => [x.key, x]));
         cache[l].forEach(o => {
           const x = m3.get(o.key); o.spend3 = x ? x.spend : 0; o.payers3 = x ? x.pc : 0;
-          if (m7) { const y = m7.get(o.key); o.byWeek = y ? y.byDay : new Map(); }
+          const y = mLife.get(o.key); o.byLife = y ? y.byDay : new Map();
+          const lt = lifeTotals(o, l, day);
+          o.lifeSp = lt.sp; o.lifeP0 = lt.p0; o.lifeFrom = lt.from;
         });
       }
       return cache[l];
@@ -1574,8 +1585,8 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
         </td>
         <td>${bsCombo(o.spend, bud, (o.spend3 || 0) < 100)}</td>
         <td class="${(o.payers3 || 0) < 5 ? 'dim' : ''}">${fmt.num(o.p0)}</td>
-        <td>${cppToday(o, day)}</td>
-        <td>${cpp3d(o, day)}</td>
+        <td>${cppToday(o, day, rowLv, rowLv === 'account' ? kidsOfRow(o, 'account') : null)}</td>
+        <td>${cppLife(o, day, rowLv, rowLv === 'account' ? kidsOfRow(o, 'account') : null)}</td>
         <td class="live-td">${liveCell(o, rowLv, day)}</td>
         <td>${ratePill(o.d0)}${o.est ? '<i class="est" title="这天没有这一条的回收归属，按花费分摊">估</i>' : ''}</td>
         <td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td>
@@ -1642,13 +1653,14 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     if (BUD.known) for (const n in BUD.acc) { const p = (acctMeta(n) || {}).product; if (p) prodBud[p] = (prodBud[p] || 0) + (BUD.acc[n] || 0); }
     for (const pid in prodBud) if (!prodSum[pid] && prodBud[pid]) prodSum[pid] = Object.assign(z(), { pid });
     const prodRows = Object.values(prodSum).filter(a => a.spend > 0 || prodBud[a.pid]).sort((x, y) => y.spend - x.spend);
+
     const ovRow = (a, label, b, cls, advHtml) => {
       const d1 = d1Of(a, day);
       const d0 = okSp(a.spend) ? a.n[0] / (a.spend * FEE) : null;
       return `<tr class="ov-row ${cls}">
         <td class="tree-cell">${lamp(a.spend, a.pc)}<span class="txt"><b>${esc(label)}</b></span></td>
         <td>${bsCombo(a.spend, b)}</td>
-        <td>${fmt.num(a.p0)}</td><td>${cppToday(a, day)}</td><td>${cpp3d(a, day)}</td>
+        <td>${fmt.num(a.p0)}</td><td>${cppToday(a, day, 'account', (a._camps || null))}</td><td>${cppLife(a, day, 'account', (a._camps || null))}</td>
         <td class="live-td"><span class="dim"></span></td>
         <td>${ratePill(d0)}</td><td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td><td>${advHtml != null ? advHtml : '<span class="dim">—</span>'}</td></tr>`;
     };
@@ -1671,10 +1683,13 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       }
     } else body = renderRows('account', top, 0);
     const accsOfPid = pid => top.filter(o => pOfAcc(o.acc) === pid);
+    const campsOfAcc = acc => kidsOf('campaign').filter(c => c.acc === acc);
+    prodRows.forEach(a => { a._camps = top.filter(o => pOfAcc(o.acc) === a.pid).flatMap(o => campsOfAcc(o.acc)); });
+    const allCamps = top.flatMap(o => campsOfAcc(o.acc));
     const overview = splitByProd
-      ? ovRow(prodRows.reduce(addTo, z()), '全部产品', BUD.known ? (prodRows.reduce((t, a) => t + (prodBud[a.pid] || 0), 0) || null) : null, 'ov-all', prodAdviceCell(top))
+      ? ovRow(Object.assign(prodRows.reduce(addTo, z()), { _camps: allCamps }), '全部产品', BUD.known ? (prodRows.reduce((t, a) => t + (prodBud[a.pid] || 0), 0) || null) : null, 'ov-all', prodAdviceCell(top))
       : prodRows.map(a => ovRow(a, (PRODUCTS.find(x => x.id === a.pid) || {}).short || a.pid, BUD.known ? (prodBud[a.pid] || null) : null, '', prodAdviceCell(accsOfPid(a.pid)))).join('')
-        + (prodRows.length > 1 ? ovRow(ovAll, '全部产品', ovAllB, 'ov-all', prodAdviceCell(top)) : '');
+        + (prodRows.length > 1 ? ovRow(Object.assign(ovAll, { _camps: allCamps }), '全部产品', ovAllB, 'ov-all', prodAdviceCell(top)) : '');
     let footB = null;
     for (const o of tgt) { const v = budOf(o, lv); if (v) footB = (footB || 0) + v; }
 
@@ -1765,20 +1780,46 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     const col = { ok: 'color:#15803d;background:#dcfce7', warn: 'color:#a16207;background:#fef9c3', bad: 'color:#b91c1c;background:#fee2e2', mute: 'color:#6b7280;background:#f3f4f6' }[t] || 'color:#6b7280;background:#f3f4f6';
     return `<span class="cpp-band" style="${col};padding:1px 6px;border-radius:6px;font-weight:600;white-space:nowrap" title="${esc(tip)}">${txt}${arrowHtml || ''}</span>`;
   }
-  /* 今日 CPP 右侧趋势：较近3日 CPP；涨=红↑（成本升）· 跌=绿↓（成本降）· 持平不显示 */
+  /* 今日 CPP 右侧趋势：较上线以来 CPP；涨=红↑ · 跌=绿↓ · 持平不显示 */
   function cppTrendArrow(todayV, baseV) {
     if (todayV == null || baseV == null) return '';
-    if (todayV === Infinity && baseV === Infinity) return '';
-    if (todayV === Infinity) return '<span class="cpp-arr up" title="较近3日上升">↑</span>';
-    if (baseV === Infinity) return '<span class="cpp-arr dn" title="较近3日下降">↓</span>';
-    const a = Math.round(todayV), b = Math.round(baseV);
-    if (a > b) return '<span class="cpp-arr up" title="较近3日上升">↑</span>';
-    if (a < b) return '<span class="cpp-arr dn" title="较近3日下降">↓</span>';
+    if (todayV === Infinity) return '<span class="cpp-arr up" title="较上线以来上升">↑</span>';
+    if (baseV === Infinity) return '<span class="cpp-arr dn" title="较上线以来下降">↓</span>';
+    const a = +todayV, b = +baseV;
+    if (a > b) return '<span class="cpp-arr up" title="较上线以来上升">↑</span>';
+    if (a < b) return '<span class="cpp-arr dn" title="较上线以来下降">↓</span>';
     return '';
   }
-  const cppToday = (o, day) => cppCell(o.spend, o.pc, '今日 CPP', fmt.md(day),
-    cppTrendArrow(cppOf(o.spend || 0, o.pc || 0), cppOf(o.spend3 || 0, o.payers3 || 0)));
-  const cpp3d = (o, day) => cppCell(o.spend3, o.payers3, '近3日 CPP', `${fmt.md(addDays(day, -2))}–${fmt.md(day)}`);
+  function lifeCppParts(o, l, day, campKids) {
+    if (l === 'account' && campKids) {
+      let sp = 0, p0 = 0, from = null;
+      for (const c of campKids) {
+        const t = (c.lifeSp != null) ? { sp: c.lifeSp, p0: c.lifeP0 || 0, from: c.lifeFrom } : lifeTotals(c, 'campaign', day);
+        sp += t.sp; p0 += t.p0;
+        if (t.from && (!from || t.from < from)) from = t.from;
+      }
+      return { sp, p0, from };
+    }
+    return lifeTotals(o, l, day);
+  }
+  const cppToday = (o, day, l, campKids) => {
+    const life = (l && (l === 'adset' || l === 'ad' || l === 'campaign' || l === 'account'))
+      ? lifeCppParts(o, l, day, campKids) : { sp: o.spend3 || 0, p0: o.payers3 || 0 };
+    return cppCell(o.spend, o.pc, '今日 CPP', fmt.md(day),
+      cppTrendArrow(cppOf(o.spend || 0, o.pc || 0), cppOf(life.sp, life.p0)));
+  };
+  const cppLife = (o, day, l, campKids) => {
+    let t;
+    if (l === 'account' && campKids) t = lifeCppParts(o, l, day, campKids);
+    else if (o && o.lifeSp != null) t = { sp: o.lifeSp, p0: o.lifeP0 || 0, from: o.lifeFrom };
+    else t = lifeCppParts(o, l || 'adset', day, campKids);
+    const from = t.from || (M.life_from || '');
+    const rangeTxt = from ? `${fmt.md(from)}–${fmt.md(day)}` : fmt.md(day);
+    const note = (M.life_from ? `；明细自 ${fmt.md(M.life_from)}` : '') +
+      (M.life_pre_before ? `，${fmt.md(M.life_pre_before)} 前用累计前缀` : '');
+    return cppCell(t.sp, t.p0, '上线以来 CPP', rangeTxt + note);
+  };
+
 
   /* 调整建议（Billy 2026-11-05：今日 CPP 主、近3日辅；D0 率不做门槛，不跟代理比） */
   function campBudgetKind(acc, camp) {
@@ -1997,7 +2038,16 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
         <td>${bsCombo(c.total.spend, c.footB)}</td>
         <td class="${(c.total.payers3 || 0) < 5 ? 'dim' : ''}">${fmt.num(c.total.p0)}</td>
         <td>${cppToday(c.total, c.day)}</td>
-        <td>${cpp3d(c.total, c.day)}</td>
+        <td>${(() => {
+          if (!c.top || !c.top.length) return '<span class="dim">—</span>';
+          let sp = 0, p0 = 0, from = null;
+          for (const o of c.top) {
+            sp += o.lifeSp || 0; p0 += o.lifeP0 || 0;
+            if (o.lifeFrom && (!from || o.lifeFrom < from)) from = o.lifeFrom;
+          }
+          const rangeTxt = from ? `${fmt.md(from)}–${fmt.md(c.day)}` : fmt.md(c.day);
+          return cppCell(sp, p0, '上线以来 CPP', rangeTxt);
+        })()}</td>
         <td class="live-td"><span class="dim"></span></td>
         <td>${ratePill(c.rate)}</td>
         <td${pc(c.day, 1, 'pc-bot')}>${f1.due ? ratePill(f1.rate) : f1.pend}</td>
@@ -2019,7 +2069,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
           <th colspan="8">${fmt.md(day)} 安装 cohort</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>消耗 / 预算${tipI('进度条 + 消耗比例 + 花费/预算。消耗比例 = 花费 ÷ 预算（今天盘中会偏低）。预算：账户 = 当日日预算台账；Campaign = CBO 用 campaign 预算、ABO 用当天有花费 Adset 预算之和（budget_tree 回溯到焦点日）；Adset = 自身日预算（ABO）；Ad 无日预算。无预算时只显示花费。产品行 = 该产品账户预算之和。')}</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较近3日 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。本列只作辅读（防单日偶然好看）；行首灯、红黄绿筛选与调整建议以今日 CPP 为主。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>上线${tipI('仅 Adset/Ad：主文「第 N 天」（Meta created_time 的上海日历日，创建当日=第1天；相对焦点日）。下方小字为上线时刻 MM-DD HH:mm（非今年带年）。右侧小图=近 7 个上海自然日每日 CPP（花费÷D0 付费人；上线不足 7 天从创建日起）。断点/红点=当天有花费但 0 付费。悬停看逐日花/付费人/CPP。账号/Campaign 空白。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看今日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 近3日花<$100且付费差 灰（灯仍按今日；建议列样本不足看近3日））；D0 率不作加减停主门槛。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('Adset 与其下 Ad 合并为一格（展开跨行；收合也显示合并文案）：Adset 层加减/关停/恢复 + 需关停的 Ad 具名。仅 ABO 的 Adset/Ad 给建议；CBO/未知显示 —。建议以今日 CPP 为主、近3日作辅；D0 率不作关停门槛，但今日 CPP 好（≤$40）时按 D0 分档加档：D0<30% 保持 · 30%–50% +15% · ≥50% +25%（CPP≤$25 不单独加档；无 +10/+20/+30）；减档对称 -15% / -25%（>$55 用 -25%）。小预算（日预算≤$50）且今日 CPP $40–70、D0<30% → 直接关停（不减到 $30，不看消耗进度）；>$50 仍 -15/-25。近3日差不挡加：今日好且 CPP 已降 → 建议加。读数优先级今日 CPP→D0→消耗进度只作辅。CPP $40–70：先入减档带；D0<30%/无 D0 必须减（打满不护航）；D0≥30% 时 pace 才参与（≥90% 且 D0≥50% 可 +15% · ≥90% 且 D0 30–50% 可保持 · 否则减）。差 Adset 关停；若历史有量/预算抬过 → 提示疑疲劳并建议补同营其他好 Adset 下的素材（列出 1–2 个今日花费最高的好 Ad 名）；减预算只在 Adset；Ad 层只关停或保持（永不写「减预算」/加减金额）。同组：花费<$50→样本小·保持（不关）；仅贵的 CPP 黄/红且存在花费≥$50、CPP≤其70% 的便宜 Ad →「关停「贵」给「便宜」让路」；已删「预算被吃关停便宜 Ad」。仅日历今天且北京时间 21:00 前默认再观察（昨天不锁）；例外近3日花≥$100 且近3日 D0 付费=0 → 关停。关停：今日花≥$100 且今日差，或近3日花≥$100 且今日 0 付费/CPP>$70。样本不足仅近3日花<$100 且近3日付费差（今日花不单独定）。加减金额基准=Adset 日预算；无预算不给 xx→yy。已关行：违规（DISAPPROVED/WITH_ISSUES）保持关停；人工/级联暂停且今日 CPP≤$40 有付费、D0≥30% → 恢复打开（上级关需先开上级）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。')}</th></tr>
+          <th>账号 / Campaign / Adset / Ad</th><th>消耗 / 预算${tipI('进度条 + 消耗比例 + 花费/预算。消耗比例 = 花费 ÷ 预算（今天盘中会偏低）。预算：账户 = 当日日预算台账；Campaign = CBO 用 campaign 预算、ABO 用当天有花费 Adset 预算之和（budget_tree 回溯到焦点日）；Adset = 自身日预算（ABO）；Ad 无日预算。无预算时只显示花费。产品行 = 该产品账户预算之和。')}</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较上线以来 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>上线以来 CPP${tipI('上线以来 CPP = 自 Meta created_time（上海日历日）至焦点日的累计花费 ÷ 累计 D0 付费人数（全市场一律 D0）。Adset/Ad 用自身创建时间；Campaign 用 campaign created_time；账号/产品行 = 其下各 Campaign 各自上线以来累计后再加总。明细自 life_from；代理 7 天窗以外用 life_pre 前缀补齐。色带同今日 CPP。行首灯/建议仍以今日 CPP 为主。')}</th><th>上线${tipI('仅 Adset/Ad 显示「第 N 天」（Meta created_time 上海日历，创建当日=第1天，相对焦点日）。账号/Campaign 空白。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看今日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 近3日花<$100且付费差 灰（灯仍按今日；建议列样本不足看近3日））；D0 率不作加减停主门槛。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('Adset 与其下 Ad 合并为一格（展开跨行；收合也显示合并文案）：Adset 层加减/关停/恢复 + 需关停的 Ad 具名。仅 ABO 的 Adset/Ad 给建议；CBO/未知显示 —。建议以今日 CPP 为主、近3日作辅；D0 率不作关停门槛，但今日 CPP 好（≤$40）时按 D0 分档加档：D0<30% 保持 · 30%–50% +15% · ≥50% +25%（CPP≤$25 不单独加档；无 +10/+20/+30）；减档对称 -15% / -25%（>$55 用 -25%）。小预算（日预算≤$50）且今日 CPP $40–70、D0<30% → 直接关停（不减到 $30，不看消耗进度）；>$50 仍 -15/-25。近3日差不挡加：今日好且 CPP 已降 → 建议加。读数优先级今日 CPP→D0→消耗进度只作辅。CPP $40–70：先入减档带；D0<30%/无 D0 必须减（打满不护航）；D0≥30% 时 pace 才参与（≥90% 且 D0≥50% 可 +15% · ≥90% 且 D0 30–50% 可保持 · 否则减）。差 Adset 关停；若历史有量/预算抬过 → 提示疑疲劳并建议补同营其他好 Adset 下的素材（列出 1–2 个今日花费最高的好 Ad 名）；减预算只在 Adset；Ad 层只关停或保持（永不写「减预算」/加减金额）。同组：花费<$50→样本小·保持（不关）；仅贵的 CPP 黄/红且存在花费≥$50、CPP≤其70% 的便宜 Ad →「关停「贵」给「便宜」让路」；已删「预算被吃关停便宜 Ad」。仅日历今天且北京时间 21:00 前默认再观察（昨天不锁）；例外近3日花≥$100 且近3日 D0 付费=0 → 关停。关停：今日花≥$100 且今日差，或近3日花≥$100 且今日 0 付费/CPP>$70。样本不足仅近3日花<$100 且近3日付费差（今日花不单独定）。加减金额基准=Adset 日预算；无预算不给 xx→yy。已关行：违规（DISAPPROVED/WITH_ISSUES）保持关停；人工/级联暂停且今日 CPP≤$40 有付费、D0≥30% → 恢复打开（上级关需先开上级）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。')}</th></tr>
       </thead>
       <tbody id="drillOv" class="ov-body">${c.overview}</tbody>
       <tbody id="drillRows">${c.body}</tbody>
@@ -2049,7 +2099,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
           <div><span>${fmt.md(dd)} D0 率</span><b>${fmt.pct(nd.d0)}</b></div>
           <div><span>D0 付费人数</span><b>${fmt.num(nd.p0)}</b></div>
           <div><span>今日 CPP</span><b>${cppToday(nd, dd)}</b></div>
-          <div><span>近 3 日 CPP</span><b>${cpp3d(nd, dd)}</b></div>
+          <div><span>上线以来 CPP</span><b>${cppLife(nd, dd, f.lv)}</b></div>
           <div><span>D1 率${provTag(dd, 1)}</span><b>${x1.due ? fmt.pct(x1.rate) : x1.pend}</b></div>
           <div><span>D3 率${provTag(dd, 3)}</span><b>${x3.due ? fmt.pct(x3.rate) : x3.pend}</b></div>
         </div>
@@ -2522,7 +2572,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     b.innerHTML = `
       <h3>核心口径</h3>
       <ul>
-        <li><b>CPP（先看 CPP，再看 D0）</b>：面板同时展示 <b>今日 CPP</b> 与 <b>近3日 CPP</b>。今日 = 今日花费 ÷ 今日 D0 付费人数；近3日 = 以焦点日为末日、含焦点日共 3 个自然日花费 ÷ 同窗 D0 付费人数（缺日按 0）。付费人数：<b>全市场一律 D0</b>（p0）。D1/D3/D5/D7 只作回收参考、不进 CPP。CPP 分档两列相同：<b>≤$40 好 / $40–70 边缘 / &gt;$70 或窗内 0 付费且花费 ≥$100 差</b>。<b>建议与行首灯看今日 CPP，近3日作辅</b>（防单日偶然好看；读数顺序：当日CPP → 近3日CPP → D0率；D0率不作加减停主门槛）。绝对愿意支付线，<b>禁止跟代理比 CPP</b>。D0 率仍是当天付费金额÷当天花费（不动）。<b>调整建议列</b>仅 ABO 的 Adset/Ad：今日 CPP 好时按 D0 分档加档：D0&lt;30% 保持 · 30%–50% +15% · ≥50% +25%（CPP≤$25 不单独加档；近3日差不挡加）；减档 -15%/-25%；消耗≥90% 且 CPP 尚可不减；差 Adset 关停并提示疲劳换素材；Ad 层纯文案不挪金额；仅日历今天且北京&lt;21:00 默认再观察（昨天不锁；例外近3日花≥$100且0付费→关停）。关停含近3日花≥$100且今日差；样本不足仅近3日花&lt;$100且近3日差。<b>已关的行</b>：违规下线（DISAPPROVED/WITH_ISSUES）保持关停；人工/级联暂停但今日 CPP≤$40 有付费且 D0≥30% → 恢复打开（上级关先开上级）。</li>
+        <li><b>CPP（先看 CPP，再看 D0）</b>：面板同时展示 <b>今日 CPP</b> 与 <b>上线以来 CPP</b>。今日 = 今日花费 ÷ 今日 D0 付费人数；上线以来 = 自 created_time 至焦点日累计花费 ÷ 累计 D0 付费人数。付费人数：<b>全市场一律 D0</b>（p0）。D1/D3/D5/D7 只作回收参考、不进 CPP。CPP 分档两列相同：<b>≤$40 好 / $40–70 边缘 / &gt;$70 或窗内 0 付费且花费 ≥$100 差</b>。<b>建议与行首灯看今日 CPP，上线以来作辅</b>（读数顺序：当日CPP → 上线以来CPP → D0率；D0率不作加减停主门槛；建议内部部分规则仍用近3日花费/付费，见发布说明）。绝对愿意支付线，<b>禁止跟代理比 CPP</b>。D0 率仍是当天付费金额÷当天花费（不动）。<b>调整建议列</b>仅 ABO 的 Adset/Ad：今日 CPP 好时按 D0 分档加档：D0&lt;30% 保持 · 30%–50% +15% · ≥50% +25%（CPP≤$25 不单独加档；近3日差不挡加）；减档 -15%/-25%；消耗≥90% 且 CPP 尚可不减；差 Adset 关停并提示疲劳换素材；Ad 层纯文案不挪金额；仅日历今天且北京&lt;21:00 默认再观察（昨天不锁；例外近3日花≥$100且0付费→关停）。关停含近3日花≥$100且今日差；样本不足仅近3日花&lt;$100且近3日差。<b>已关的行</b>：违规下线（DISAPPROVED/WITH_ISSUES）保持关停；人工/级联暂停但今日 CPP≤$40 有付费且 D0≥30% → 恢复打开（上级关先开上级）。</li>
         <li><b>D0 净回收率</b> = 安装当天净回收 / 当天花费。<b>50% 为正常参考值</b>，任何国家同一标准。</li>
         <li><b>D1 / D3 / D7 / D14</b> = 同一批新增在往后第 1/3/7/14 天的净回收额。</li>
         <li><b>Cohort 累计回收</b> = 那一天的新增，从 D0 到报表日的累计净回收 ÷ 那天的花费。各批观察期不同，越新越低是正常的。</li>
