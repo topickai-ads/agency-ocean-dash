@@ -1488,15 +1488,83 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       if (net > 0) return badge('总预算 +' + fmt.money(net), 'ok');
       return badge('总预算 −' + fmt.money(Math.abs(net)), 'warn');
     };
-    const rowHTML = (o, rowLv, label, extra, hasChild, key, depth, sibs) => {
+    /* Billy 2026-11-06：Adset + 其下 Ad 的调整建议合并为一格（展开时 rowspan；收合时 Adset 行仍显示合并文案） */
+    const advBadgeText = html => {
+      if (!html) return '';
+      const m = /class="adv-badge"[^>]*>([^<]*)</.exec(html);
+      if (m) return m[1].trim();
+      return String(html).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    };
+    const advIsCloseLike = t => /关停|恢复打开/.test(t || '');
+    const advMkNamed = (txt, tone, why) => {
+      const col = { ok: 'color:#15803d;background:#dcfce7', warn: 'color:#a16207;background:#fef9c3', bad: 'color:#b91c1c;background:#fee2e2', hold: 'color:#374151;background:#f3f4f6' }[tone] || 'color:#6b7280';
+      return `<span class="adv-badge" style="${col};padding:1px 6px;border-radius:6px;font-weight:600;display:inline-block;line-height:1.25;white-space:normal;text-align:center" title="${esc(why || '')}">${esc(txt)}</span>`;
+    };
+    const adsetGroupAdvice = (aset, ads, asetSibs) => {
+      const bud = budOf(aset, 'adset');
+      const asetHtml = adviceCell(aset, day, {
+        isAd: false,
+        isCamp: false,
+        sibs: (asetSibs || []).filter(x => x !== aset),
+        bud,
+        status: onOf(aset, 'adset'),
+        adsOf: a => kidsOf('ad').filter(r => r.acc === a.acc && r.camp === a.camp && (r.ads || '') === (a.ads || ''))
+      });
+      const parts = [asetHtml];
+      for (const ad of (ads || [])) {
+        const h = adviceCell(ad, day, {
+          isAd: true,
+          isCamp: false,
+          sibs: (ads || []).filter(x => x !== ad),
+          bud: null,
+          status: onOf(ad, 'ad')
+        });
+        const t = advBadgeText(h);
+        if (!advIsCloseLike(t)) continue;
+        const name = ad.ad || '(未命名)';
+        const tone = /恢复打开/.test(t) ? 'ok' : 'bad';
+        const label = /恢复打开/.test(t) ? `恢复打开「${name}」` : (/关停/.test(t) ? `${t}「${name}」` : `${t}「${name}」`);
+        parts.push(advMkNamed(label, tone, `Ad 层建议：${t}`));
+      }
+      if (parts.length === 1) return parts[0];
+      return `<div class="adv-stack">${parts.join('')}</div>`;
+    };
+
+    const rowHTML = (o, rowLv, label, extra, hasChild, key, depth, sibs, advOpt) => {
       const d1 = d1Of(o, day);
       const bud = budOf(o, rowLv);
+      advOpt = advOpt || {};
 
       const caret = hasChild
         ? `<button class="caret ${state.open.has(key) ? 'open' : ''}" data-k="${encodeURIComponent(key)}" aria-label="展开"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
         : '<button class="caret blank" tabindex="-1"></button>';
       const isFocus = state.focus && state.focus.lv === rowLv && state.focus.key === o.key;
       const strong = rowLv === 'account' || rowLv === 'campaign';
+      let advTd = '';
+      if (advOpt.skipAdv) {
+        advTd = '';
+      } else if (advOpt.mergeHtml != null) {
+        const rs = advOpt.rowspan > 1 ? ` rowspan="${advOpt.rowspan}"` : '';
+        advTd = `<td class="adv-merge"${rs}>${advOpt.mergeHtml}</td>`;
+      } else if (rowLv === 'account') {
+        advTd = `<td>${prodAdviceCell([o])}</td>`;
+      } else if (rowLv === 'campaign') {
+        advTd = `<td>${adviceCell(o, day, {
+          isAd: false, isCamp: true,
+          sibs: (sibs || []).filter(x => x !== o),
+          bud, status: onOf(o, rowLv),
+          adsOf: aset => kidsOf('ad').filter(r => r.acc === aset.acc && r.camp === aset.camp && (r.ads || '') === (aset.ads || ''))
+        })}</td>`;
+      } else if (rowLv === 'adset' || rowLv === 'ad') {
+        advTd = `<td>${adviceCell(o, day, {
+          isAd: rowLv === 'ad', isCamp: false,
+          sibs: (sibs || []).filter(x => x !== o),
+          bud, status: onOf(o, rowLv),
+          adsOf: aset => kidsOf('ad').filter(r => r.acc === aset.acc && r.camp === aset.camp && (r.ads || '') === (aset.ads || ''))
+        })}</td>`;
+      } else {
+        advTd = '<td><span class="dim">—</span></td>';
+      }
       return `<tr class="lv-${rowLv} d${depth} ${isFocus ? 'is-focus' : ''}" data-lv="${rowLv}" data-key="${encodeURIComponent(key)}" data-node="${encodeURIComponent(o.key)}" data-name="${esc(label)}" data-extra="${esc(extra || '')}">
         <td class="tree-cell" style="padding-left:${10 + Math.min(depth, 3) * 12}px">
           ${lamp(o.spend, o.pc)}${caret}
@@ -1509,15 +1577,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
         <td class="live-td">${liveCell(o, rowLv, day)}</td>
         <td>${ratePill(o.d0)}${o.est ? '<i class="est" title="这天没有这一条的回收归属，按花费分摊">估</i>' : ''}</td>
         <td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td>
-        <td>${rowLv === 'account' ? prodAdviceCell([o])
-          : (rowLv === 'campaign' || rowLv === 'adset' || rowLv === 'ad') ? adviceCell(o, day, {
-          isAd: rowLv === 'ad',
-          isCamp: rowLv === 'campaign',
-          sibs: (sibs || []).filter(x => x !== o),
-          bud,
-          status: onOf(o, rowLv),
-          adsOf: aset => kidsOf('ad').filter(r => r.acc === aset.acc && r.camp === aset.camp && (r.ads || '') === (aset.ads || ''))
-        }) : '<span class="dim">—</span>'}</td>
+        ${advTd}
       </tr>`;
     };
 
@@ -1526,8 +1586,23 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
       for (const o of list) {
         const kids = kidsOfRow(o, l);
         const key = l + '|' + o.key;
+        const open = !!(kids.length && state.open.has(key));
+        /* Adset：建议与可见 Ad 合并；展开时 rowspan 跨 Adset+Ads；收合仍显示同一套合并文案 */
+        if (l === 'adset') {
+          const ads = kids;
+          const mergeHtml = adsetGroupAdvice(o, ads, list);
+          const span = open && ads.length ? 1 + ads.length : 1;
+          out += rowHTML(o, l, nameOf(o, l), extraOf(o, l), kids.length > 0, key, depth, list, { mergeHtml, rowspan: span });
+          if (open) {
+            for (const ad of ads) {
+              const ak = 'ad|' + ad.key;
+              out += rowHTML(ad, 'ad', nameOf(ad, 'ad'), extraOf(ad, 'ad'), false, ak, depth + 1, ads, { skipAdv: true });
+            }
+          }
+          continue;
+        }
         out += rowHTML(o, l, nameOf(o, l), extraOf(o, l), kids.length > 0, key, depth, list);
-        if (kids.length && state.open.has(key)) out += renderRows(TREE[l], kids, depth + 1);
+        if (open) out += renderRows(TREE[l], kids, depth + 1);
       }
       return out;
     };
@@ -1928,7 +2003,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
           <th colspan="8">${fmt.md(day)} 安装 cohort</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>消耗 / 预算${tipI('进度条 + 消耗比例 + 花费/预算。消耗比例 = 花费 ÷ 预算（今天盘中会偏低）。预算：账户 = 当日日预算台账；Campaign = CBO 用 campaign 预算、ABO 用当天有花费 Adset 预算之和（budget_tree 回溯到焦点日）；Adset = 自身日预算（ABO）；Ad 无日预算。无预算时只显示花费。产品行 = 该产品账户预算之和。')}</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较近3日 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。本列只作辅读（防单日偶然好看）；行首灯、红黄绿筛选与调整建议以今日 CPP 为主。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>上线${tipI('仅 Adset/Ad：主文「第 N 天」（Meta created_time 的上海日历日，创建当日=第1天；相对焦点日）。下方小字为上线时刻 MM-DD HH:mm（非今年带年）。右侧小图=近 7 个上海自然日每日 CPP（花费÷D0 付费人；上线不足 7 天从创建日起）。断点/红点=当天有花费但 0 付费。悬停看逐日花/付费人/CPP。账号/Campaign 空白。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看今日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 近3日花<$100且付费差 灰（灯仍按今日；建议列样本不足看近3日））；D0 率不作加减停主门槛。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('仅 ABO 的 Adset/Ad 给建议；CBO/未知显示 —。建议以今日 CPP 为主、近3日作辅；D0 率不作关停门槛，但今日 CPP 好（≤$40）时按 D0 分档加档：D0<30% 保持 · 30%–50% +15% · ≥50% +25%（CPP≤$25 不单独加档；无 +10/+20/+30）；减档对称 -15% / -25%（>$55 用 -25%）。小预算（日预算≤$50）且今日 CPP $40–70、D0<30% → 直接关停（不减到 $30，不看消耗进度）；>$50 仍 -15/-25。近3日差不挡加：今日好且 CPP 已降 → 建议加。读数优先级今日 CPP→D0→消耗进度只作辅。CPP $40–70：先入减档带；D0<30%/无 D0 必须减（打满不护航）；D0≥30% 时 pace 才参与（≥90% 且 D0≥50% 可 +15% · ≥90% 且 D0 30–50% 可保持 · 否则减）。差 Adset 关停；若历史有量/预算抬过 → 提示疑疲劳并建议补同营其他好 Adset 下的素材（列出 1–2 个今日花费最高的好 Ad 名）；减预算只在 Adset；Ad 层只关停或保持（永不写「减预算」/加减金额；弱 Ad 仍可关停·挪给主 Ad）。仅日历今天且北京时间 21:00 前默认再观察（昨天不锁）；例外近3日花≥$100 且近3日 D0 付费=0 → 关停。关停：今日花≥$100 且今日差，或近3日花≥$100 且今日 0 付费/CPP>$70。样本不足仅近3日花<$100 且近3日付费差（今日花不单独定）。加减金额基准=Adset 日预算；无预算不给 xx→yy。已关行：违规（DISAPPROVED/WITH_ISSUES）保持关停；人工/级联暂停且今日 CPP≤$40 有付费、D0≥30% → 恢复打开（上级关需先开上级）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。')}</th></tr>
+          <th>账号 / Campaign / Adset / Ad</th><th>消耗 / 预算${tipI('进度条 + 消耗比例 + 花费/预算。消耗比例 = 花费 ÷ 预算（今天盘中会偏低）。预算：账户 = 当日日预算台账；Campaign = CBO 用 campaign 预算、ABO 用当天有花费 Adset 预算之和（budget_tree 回溯到焦点日）；Adset = 自身日预算（ABO）；Ad 无日预算。无预算时只显示花费。产品行 = 该产品账户预算之和。')}</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较近3日 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。本列只作辅读（防单日偶然好看）；行首灯、红黄绿筛选与调整建议以今日 CPP 为主。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>上线${tipI('仅 Adset/Ad：主文「第 N 天」（Meta created_time 的上海日历日，创建当日=第1天；相对焦点日）。下方小字为上线时刻 MM-DD HH:mm（非今年带年）。右侧小图=近 7 个上海自然日每日 CPP（花费÷D0 付费人；上线不足 7 天从创建日起）。断点/红点=当天有花费但 0 付费。悬停看逐日花/付费人/CPP。账号/Campaign 空白。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看今日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 近3日花<$100且付费差 灰（灯仍按今日；建议列样本不足看近3日））；D0 率不作加减停主门槛。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('Adset 与其下 Ad 合并为一格（展开跨行；收合也显示合并文案）：Adset 层加减/关停/恢复 + 需关停的 Ad 具名。仅 ABO 的 Adset/Ad 给建议；CBO/未知显示 —。建议以今日 CPP 为主、近3日作辅；D0 率不作关停门槛，但今日 CPP 好（≤$40）时按 D0 分档加档：D0<30% 保持 · 30%–50% +15% · ≥50% +25%（CPP≤$25 不单独加档；无 +10/+20/+30）；减档对称 -15% / -25%（>$55 用 -25%）。小预算（日预算≤$50）且今日 CPP $40–70、D0<30% → 直接关停（不减到 $30，不看消耗进度）；>$50 仍 -15/-25。近3日差不挡加：今日好且 CPP 已降 → 建议加。读数优先级今日 CPP→D0→消耗进度只作辅。CPP $40–70：先入减档带；D0<30%/无 D0 必须减（打满不护航）；D0≥30% 时 pace 才参与（≥90% 且 D0≥50% 可 +15% · ≥90% 且 D0 30–50% 可保持 · 否则减）。差 Adset 关停；若历史有量/预算抬过 → 提示疑疲劳并建议补同营其他好 Adset 下的素材（列出 1–2 个今日花费最高的好 Ad 名）；减预算只在 Adset；Ad 层只关停或保持（永不写「减预算」/加减金额；弱 Ad 仍可关停·挪给主 Ad）。仅日历今天且北京时间 21:00 前默认再观察（昨天不锁）；例外近3日花≥$100 且近3日 D0 付费=0 → 关停。关停：今日花≥$100 且今日差，或近3日花≥$100 且今日 0 付费/CPP>$70。样本不足仅近3日花<$100 且近3日付费差（今日花不单独定）。加减金额基准=Adset 日预算；无预算不给 xx→yy。已关行：违规（DISAPPROVED/WITH_ISSUES）保持关停；人工/级联暂停且今日 CPP≤$40 有付费、D0≥30% → 恢复打开（上级关需先开上级）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。')}</th></tr>
       </thead>
       <tbody id="drillOv" class="ov-body">${c.overview}</tbody>
       <tbody id="drillRows">${c.body}</tbody>
