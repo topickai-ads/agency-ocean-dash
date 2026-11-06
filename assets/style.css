@@ -1016,7 +1016,7 @@ table.d.drill-t td:has(.adv-badge) { white-space: normal; vertical-align: middle
 table.d.drill-t .adv-badge { white-space: normal !important; display: inline-block; line-height: 1.25; text-align: center; }
 table.d.drill-t td.adv-merge { vertical-align: middle; text-align: center; }
 table.d.drill-t .adv-stack { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-table.d.drill-t .adv-stack .adv-badge { max-width: 160px; }
+table.d.drill-t .adv-stack .adv-badge { max-width: 200px; }
 table.d.drill-t col.c-rate { width: 118px; }
 table.d.drill-t col.c-rate1 { width: 96px; }
 table.d.drill-t col.c-d1 { width: 96px; }
