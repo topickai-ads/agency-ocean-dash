@@ -619,8 +619,9 @@
     const w = o.w || 64, h = o.h || 18, pad = 1.5;
     const n = vals.length;
     const fin = vals.filter(v => v != null && isFinite(v));
-    if (!fin.length) return '<span class="dim" style="font-size:10px">—</span>';
-    const maxV = Math.max(...fin, o.ref || 0, 1e-6);
+    const bad = o.badDots || [];
+    if (!fin.length && !bad.length) return '<span class="dim" style="font-size:10px">—</span>';
+    const maxV = Math.max(...(fin.length ? fin : [1]), o.ref || 0, 1e-6);
     const x = i => pad + (w - pad * 2) * (n <= 1 ? 0.5 : i / (n - 1));
     const y = v => h - pad - (v / maxV) * (h - pad * 2);
     let out = '';
@@ -638,6 +639,10 @@
       out = segs.map(s => `<path d="${s.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ')}" fill="none" stroke="${o.color || '#2563eb'}" stroke-width="1.25" stroke-linejoin="round" stroke-linecap="round"/>`).join('');
       const li = vals.reduce((acc, v, i) => (v != null && isFinite(v)) ? i : acc, -1);
       if (li >= 0) out += `<circle cx="${x(li).toFixed(1)}" cy="${y(vals[li]).toFixed(1)}" r="1.6" fill="${o.color || '#2563eb'}"/>`;
+    }
+    /* 有花费但 0 付费：断点 + 红点（贴底） */
+    for (const i of bad) {
+      out += `<circle cx="${x(i).toFixed(1)}" cy="${(h - pad).toFixed(1)}" r="2" fill="#dc2626"/>`;
     }
     const ref = o.ref != null
       ? `<line x1="${pad}" x2="${w - pad}" y1="${y(o.ref).toFixed(1)}" y2="${y(o.ref).toFixed(1)}" stroke="#b3bcc9" stroke-width="0.9" stroke-dasharray="2 2"/>`
@@ -1237,6 +1242,74 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
     return `<article class="card">${rows ? `<div class="issue-list">${rows}</div>` : '<div class="empty">当前窗口没有需要处理的问题</div>'}</article>`;
   }
 
+  /* ---------------- 上线第 N 天 + 近 7 日 CPP 火花（仅 Adset/Ad） ---------------- */
+  /* Meta created_time → Asia/Shanghai 日历日 / 展示串；第 1 天 = 创建当日 */
+  function parseMetaCt(iso) {
+    if (!iso) return null;
+    const d = new Date(String(iso).replace('+0000', '+00:00'));
+    if (!isFinite(d.getTime())) return null;
+    const day = bjDate(d); /* YYYY-MM-DD in Asia/Shanghai */
+    const hm = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+    const tip = (day.slice(0, 4) === CAL_TODAY.slice(0, 4) ? day.slice(5) : day) + ' ' + hm;
+    return { day, tip };
+  }
+  function createdOf(o, l) {
+    const STM = (D && D.meta && D.meta.status) || null;
+    if (!STM || !o || (l !== 'adset' && l !== 'ad')) return null;
+    const m = STM[o.acc];
+    if (!m) return null;
+    const SEP = '\x01';
+    if (l === 'adset') return parseMetaCt((m.sc || {})[(o.camp || '') + SEP + (o.ads || '')]);
+    return parseMetaCt((m.dc || {})[(o.camp || '') + SEP + (o.ads || '') + SEP + (o.ad || '')]);
+  }
+  function liveAgeParts(o, l, focusDay) {
+    const ct = createdOf(o, l);
+    if (!ct) return null;
+    const n = dayDiff(ct.day, focusDay) + 1;
+    if (n < 1) return { n: 1, ct };
+    return { n, ct };
+  }
+  /* 近 7 个上海自然日（焦点日为末日）；若有上线日且更晚，从创建日起算 */
+  function cppSparkDays(focusDay, createdDay) {
+    const days = [];
+    for (let i = 6; i >= 0; i--) days.push(addDays(focusDay, -i));
+    if (createdDay) {
+      if (createdDay > focusDay) return [];
+      const i0 = days.findIndex(d => d >= createdDay);
+      return i0 < 0 ? days : days.slice(i0);
+    }
+    return days;
+  }
+  function cppSparkCell(o, focusDay, l) {
+    if (l !== 'adset' && l !== 'ad') return '<span class="dim">—</span>';
+    const ct = createdOf(o, l);
+    const days = cppSparkDays(focusDay, ct && ct.day);
+    if (!days.length) return '<span class="dim">—</span>';
+    const by = o.byWeek || o.byDay || new Map();
+    const vals = [], bad = [], tips = [];
+    days.forEach((d, i) => {
+      const dd = by.get(d) || { spend: 0, p0: 0 };
+      const sp = dd.spend || 0, py = dd.p0 || 0;
+      let cpp = null;
+      if (py > 0) cpp = sp / py;
+      else if (sp > 0) bad.push(i);
+      vals.push(cpp);
+      tips.push(`${fmt.md(d)} 花 ${fmt.money(sp)} · D0 付费 ${fmt.num(py)} · CPP ${cpp != null ? fmt.money(cpp) : (sp > 0 ? '无付费' : '—')}`);
+    });
+    const svg = sparkSvg(vals, { w: 56, h: 16, color: '#64748b', badDots: bad });
+    return `<span class="cpp-spark" title="${esc(['近' + days.length + '日每日 CPP（花÷D0付费人）'].concat(tips).join('\n'))}">${svg}</span>`;
+  }
+  function liveCell(o, l, focusDay) {
+    if (l !== 'adset' && l !== 'ad') return '<span class="dim"></span>';
+    const age = liveAgeParts(o, l, focusDay);
+    const spark = cppSparkCell(o, focusDay, l);
+    if (!age) {
+      return `<div class="live-cell"><span class="dim" title="尚无 Meta created_time">—</span>${spark}</div>`;
+    }
+    const tip = `上线 ${age.ct.tip}（Meta created_time · 上海）· 第 ${age.n} 天（创建当日=第1天）`;
+    return `<div class="live-cell" title="${esc(tip)}"><span class="live-age">第${age.n}天<small>${esc(age.ct.tip)}</small></span>${spark}</div>`;
+  }
+
   /* ---------------- 下钻：账号 → campaign → adset → ad ---------------- */
 
   /* 算一遍当前层级的行；drillBody（首次）和 refreshDrill（展开/选中）共用 */
@@ -1250,7 +1323,16 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
         /* CPP：焦点日为末日的近 3 个自然日（含焦点日），缺日按 0 */
         const w3 = [addDays(day, -2), addDays(day, -1), day];
         const m3 = new Map(groupRows(l, w3, { withQ: true }).map(x => [x.key, x]));
-        cache[l].forEach(o => { const x = m3.get(o.key); o.spend3 = x ? x.spend : 0; o.payers3 = x ? x.pc : 0; });
+        /* 近 7 日 byDay 给 CPP 火花（按 id 聚合；仅 Adset/Ad 用） */
+        const w7 = [];
+        for (let i = 6; i >= 0; i--) w7.push(addDays(day, -i));
+        const m7 = (l === 'adset' || l === 'ad')
+          ? new Map(groupRows(l, w7, { withQ: true }).map(x => [x.key, x]))
+          : null;
+        cache[l].forEach(o => {
+          const x = m3.get(o.key); o.spend3 = x ? x.spend : 0; o.payers3 = x ? x.pc : 0;
+          if (m7) { const y = m7.get(o.key); o.byWeek = y ? y.byDay : new Map(); }
+        });
       }
       return cache[l];
     };
@@ -1424,6 +1506,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
         <td class="${(o.payers3 || 0) < 5 ? 'dim' : ''}">${fmt.num(o.p0)}</td>
         <td>${cppToday(o, day)}</td>
         <td>${cpp3d(o, day)}</td>
+        <td class="live-td">${liveCell(o, rowLv, day)}</td>
         <td>${ratePill(o.d0)}${o.est ? '<i class="est" title="这天没有这一条的回收归属，按花费分摊">估</i>' : ''}</td>
         <td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td>
         <td>${rowLv === 'account' ? prodAdviceCell([o])
@@ -1489,6 +1572,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
         <td class="tree-cell">${lamp(a.spend, a.pc)}<span class="txt"><b>${esc(label)}</b></span></td>
         <td>${bsCombo(a.spend, b)}</td>
         <td>${fmt.num(a.p0)}</td><td>${cppToday(a, day)}</td><td>${cpp3d(a, day)}</td>
+        <td class="live-td"><span class="dim"></span></td>
         <td>${ratePill(d0)}</td><td${pc(day, 1)}>${d1.due ? ratePill(d1.rate) : d1.pend}</td><td>${advHtml != null ? advHtml : '<span class="dim">—</span>'}</td></tr>`;
     };
     const ovAll = prodRows.reduce(addTo, z());
@@ -1823,6 +1907,7 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
         <td class="${(c.total.payers3 || 0) < 5 ? 'dim' : ''}">${fmt.num(c.total.p0)}</td>
         <td>${cppToday(c.total, c.day)}</td>
         <td>${cpp3d(c.total, c.day)}</td>
+        <td class="live-td"><span class="dim"></span></td>
         <td>${ratePill(c.rate)}</td>
         <td${pc(c.day, 1, 'pc-bot')}>${f1.due ? ratePill(f1.rate) : f1.pend}</td>
         <td><span class="dim">—</span></td>
@@ -1835,15 +1920,15 @@ ${[1, 3, 7].map(k => `<div class="num${isProv(focus, k) ? ' prov-col pc-top' : '
 
     return `<div class="table-wrap"><table class="d drill-t" style="--name-col-w:${c.nameW}px">
       <colgroup>
-        <col class="c-name"><col class="c-bsc"><col class="c-payers"><col class="c-cpp"><col class="c-cpp"><col class="c-rate"><col class="c-rate1"><col class="c-adv">
+        <col class="c-name"><col class="c-bsc"><col class="c-payers"><col class="c-cpp"><col class="c-cpp"><col class="c-live"><col class="c-rate"><col class="c-rate1"><col class="c-adv">
       </colgroup>
       <thead>
         <tr class="grp">
           <th>名称</th>
-          <th colspan="7">${fmt.md(day)} 安装 cohort</th>
+          <th colspan="8">${fmt.md(day)} 安装 cohort</th>
         </tr>
         <tr>
-          <th>账号 / Campaign / Adset / Ad</th><th>消耗 / 预算${tipI('进度条 + 消耗比例 + 花费/预算。消耗比例 = 花费 ÷ 预算（今天盘中会偏低）。预算：账户 = 当日日预算台账；Campaign = CBO 用 campaign 预算、ABO 用当天有花费 Adset 预算之和（budget_tree 回溯到焦点日）；Adset = 自身日预算（ABO）；Ad 无日预算。无预算时只显示花费。产品行 = 该产品账户预算之和。')}</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较近3日 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。本列只作辅读（防单日偶然好看）；行首灯、红黄绿筛选与调整建议以今日 CPP 为主。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看今日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 近3日花<$100且付费差 灰（灯仍按今日；建议列样本不足看近3日））；D0 率不作加减停主门槛。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('仅 ABO 的 Adset/Ad 给建议；CBO/未知显示 —。建议以今日 CPP 为主、近3日作辅；D0 率不作关停门槛，但今日 CPP 好（≤$40）时按 D0 分档加档：D0<30% 保持 · 30%–50% +15% · ≥50% +25%（CPP≤$25 不单独加档；无 +10/+20/+30）；减档对称 -15% / -25%（>$55 用 -25%）。小预算（日预算≤$50）且今日 CPP $40–70、D0<30% → 直接关停（不减到 $30，不看消耗进度）；>$50 仍 -15/-25。近3日差不挡加：今日好且 CPP 已降 → 建议加。读数优先级今日 CPP→D0→消耗进度只作辅。CPP $40–70：先入减档带；D0<30%/无 D0 必须减（打满不护航）；D0≥30% 时 pace 才参与（≥90% 且 D0≥50% 可 +15% · ≥90% 且 D0 30–50% 可保持 · 否则减）。差 Adset 关停；若历史有量/预算抬过 → 提示疑疲劳并建议补同营其他好 Adset 下的素材（列出 1–2 个今日花费最高的好 Ad 名）；减预算只在 Adset；Ad 层只关停或保持（永不写「减预算」/加减金额；弱 Ad 仍可关停·挪给主 Ad）。仅日历今天且北京时间 21:00 前默认再观察（昨天不锁）；例外近3日花≥$100 且近3日 D0 付费=0 → 关停。关停：今日花≥$100 且今日差，或近3日花≥$100 且今日 0 付费/CPP>$70。样本不足仅近3日花<$100 且近3日付费差（今日花不单独定）。加减金额基准=Adset 日预算；无预算不给 xx→yy。已关行：违规（DISAPPROVED/WITH_ISSUES）保持关停；人工/级联暂停且今日 CPP≤$40 有付费、D0≥30% → 恢复打开（上级关需先开上级）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。')}</th></tr>
+          <th>账号 / Campaign / Adset / Ad</th><th>消耗 / 预算${tipI('进度条 + 消耗比例 + 花费/预算。消耗比例 = 花费 ÷ 预算（今天盘中会偏低）。预算：账户 = 当日日预算台账；Campaign = CBO 用 campaign 预算、ABO 用当天有花费 Adset 预算之和（budget_tree 回溯到焦点日）；Adset = 自身日预算（ABO）；Ad 无日预算。无预算时只显示花费。产品行 = 该产品账户预算之和。')}</th><th>D0 付费人</th><th>今日 CPP${tipI('今日 CPP = 焦点日当天花费 ÷ 当天 D0 付费人数（全市场一律 D0）。数值右侧箭头较近3日 CPP：涨红↑ · 跌绿↓ · 持平不显示。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>近3日 CPP${tipI('近3日 CPP = 近3日花费 ÷ 近3日 D0 付费人数（焦点日为末日含当日共 3 天；全市场一律 D0）。本列只作辅读（防单日偶然好看）；行首灯、红黄绿筛选与调整建议以今日 CPP 为主。CPP 分档：≤$40 好 · $40–70 边缘 · >$70 或 0 付费且花费≥$100 差；不跟代理比。')}</th><th>上线${tipI('仅 Adset/Ad：主文「第 N 天」（Meta created_time 的上海日历日，创建当日=第1天；相对焦点日）。下方小字为上线时刻 MM-DD HH:mm（非今年带年）。右侧小图=近 7 个上海自然日每日 CPP（花费÷D0 付费人；上线不足 7 天从创建日起）。断点/红点=当天有花费但 0 付费。悬停看逐日花/付费人/CPP。账号/Campaign 空白。')}</th><th>D0 率${tipI('D0 率 = 安装当天净回收 ÷ 当天花费×1.05（含代理服务费 5%）。本列 pill 仍按 D0 率上色；行首灯与红黄绿筛选看今日 CPP（≤$40 绿 · $40–70 黄 · >$70 或花≥$100无付费 红 · 近3日花<$100且付费差 灰（灯仍按今日；建议列样本不足看近3日））；D0 率不作加减停主门槛。')}</th><th${pc(day, 1, 'pc-top')} title="累计到安装日+1 的净回收 ÷ 花费×1.05">D1 率${provTag(day, 1)}</th><th>调整建议${tipI('仅 ABO 的 Adset/Ad 给建议；CBO/未知显示 —。建议以今日 CPP 为主、近3日作辅；D0 率不作关停门槛，但今日 CPP 好（≤$40）时按 D0 分档加档：D0<30% 保持 · 30%–50% +15% · ≥50% +25%（CPP≤$25 不单独加档；无 +10/+20/+30）；减档对称 -15% / -25%（>$55 用 -25%）。小预算（日预算≤$50）且今日 CPP $40–70、D0<30% → 直接关停（不减到 $30，不看消耗进度）；>$50 仍 -15/-25。近3日差不挡加：今日好且 CPP 已降 → 建议加。读数优先级今日 CPP→D0→消耗进度只作辅。CPP $40–70：先入减档带；D0<30%/无 D0 必须减（打满不护航）；D0≥30% 时 pace 才参与（≥90% 且 D0≥50% 可 +15% · ≥90% 且 D0 30–50% 可保持 · 否则减）。差 Adset 关停；若历史有量/预算抬过 → 提示疑疲劳并建议补同营其他好 Adset 下的素材（列出 1–2 个今日花费最高的好 Ad 名）；减预算只在 Adset；Ad 层只关停或保持（永不写「减预算」/加减金额；弱 Ad 仍可关停·挪给主 Ad）。仅日历今天且北京时间 21:00 前默认再观察（昨天不锁）；例外近3日花≥$100 且近3日 D0 付费=0 → 关停。关停：今日花≥$100 且今日差，或近3日花≥$100 且今日 0 付费/CPP>$70。样本不足仅近3日花<$100 且近3日付费差（今日花不单独定）。加减金额基准=Adset 日预算；无预算不给 xx→yy。已关行：违规（DISAPPROVED/WITH_ISSUES）保持关停；人工/级联暂停且今日 CPP≤$40 有付费、D0≥30% → 恢复打开（上级关需先开上级）。颜色：加=绿 · 减=黄 · 关停=红 · 保持/再观察/样本不足=灰。')}</th></tr>
       </thead>
       <tbody id="drillOv" class="ov-body">${c.overview}</tbody>
       <tbody id="drillRows">${c.body}</tbody>
